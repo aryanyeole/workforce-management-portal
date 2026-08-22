@@ -37,6 +37,7 @@ public class PermissionRegistry {
     void compile() {
         declare().forEach(p -> rules.add(
                 new CompiledRule(p.method(), parser.parse(p.pattern()), p)));
+        publicPatterns = PUBLIC_PATTERNS.stream().map(parser::parse).toList();
     }
 
     /**
@@ -50,6 +51,22 @@ public class PermissionRegistry {
                 .filter(r -> r.pattern().matches(container))
                 .findFirst()
                 .map(CompiledRule::permission);
+    }
+    
+    private static final List<String> PUBLIC_PATTERNS = List.of(
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/actuator/health",
+            "/actuator/health/**",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html");
+
+    private List<PathPattern> publicPatterns;
+
+    public boolean isPublic(String path) {
+        PathContainer container = PathContainer.parsePath(path);
+        return publicPatterns.stream().anyMatch(p -> p.matches(container));
     }
 
     private List<RoutePermission> declare() {
