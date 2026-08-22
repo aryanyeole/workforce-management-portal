@@ -27,6 +27,8 @@ public class PermissionRegistry {
     private static final Set<RoleCode> ALL_STAFF = Set.of(
             RoleCode.EMPLOYEE, RoleCode.MANAGER, RoleCode.PAYROLL_ADMIN, RoleCode.HR_ADMIN);
 
+    private static final Set<RoleCode> ALL_ROLES = Set.of(RoleCode.values());
+
     private final PathPatternParser parser = PathPatternParser.defaultInstance;
     private final List<CompiledRule> rules = new java.util.ArrayList<>();
 
@@ -71,6 +73,11 @@ public class PermissionRegistry {
 
     private List<RoutePermission> declare() {
         return List.of(
+                // ---- Auth ----
+                // login/refresh are unauthenticated (see PUBLIC_PATTERNS); /me
+                // requires a valid token but is open to every role, SYSTEM included.
+                new RoutePermission(HttpMethod.GET, "/api/v1/auth/me", ALL_ROLES, false),
+
                 // ---- Expense ----
                 new RoutePermission(HttpMethod.POST, "/api/v1/expenses", ALL_STAFF, false),
                 new RoutePermission(HttpMethod.GET, "/api/v1/expenses", ALL_STAFF, true),

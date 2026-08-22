@@ -64,6 +64,21 @@ public class JwtService {
      *                      or is a refresh token presented as an access token
      */
     public AuthPrincipal parseAccessToken(String token) {
+        return parse(token, "access", "Refresh token presented where access token required");
+    }
+
+    /**
+     * Mirrors {@link #parseAccessToken(String)} but requires typ=refresh, so an
+     * access token cannot be replayed against the refresh endpoint either.
+     *
+     * @throws JwtException if the token is malformed, expired, wrongly signed,
+     *                      or is an access token presented as a refresh token
+     */
+    public AuthPrincipal parseRefreshToken(String token) {
+        return parse(token, "refresh", "Access token presented where refresh token required");
+    }
+
+    private AuthPrincipal parse(String token, String expectedType, String typeMismatchMessage) {
         Jws<Claims> jws = Jwts.parser()
                 .verifyWith(key)
                 .requireIssuer(properties.issuer())
@@ -72,8 +87,8 @@ public class JwtService {
 
         Claims claims = jws.getPayload();
 
-        if (!"access".equals(claims.get(CLAIM_TYPE, String.class))) {
-            throw new JwtException("Refresh token presented where access token required");
+        if (!expectedType.equals(claims.get(CLAIM_TYPE, String.class))) {
+            throw new JwtException(typeMismatchMessage);
         }
 
         Number employeeId = claims.get(CLAIM_EMPLOYEE_ID, Number.class);
