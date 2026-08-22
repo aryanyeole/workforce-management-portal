@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: wmp
+  datasource:
+    url: jdbc:postgresql://localhost:5433/wmp
+    username: ${DB_USER:wmp}
+    password: ${DB_PASSWORD:wmp_local_dev}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.hibernate.SQL: INFO
