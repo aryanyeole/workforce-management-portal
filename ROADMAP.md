@@ -2,7 +2,7 @@
 
 **Goal:** a real, running system that makes every claim on the resume literally true — including the measured numbers.
 
-**Stack:** Java 21, Spring Boot 3.3.x, PostgreSQL 16, Flyway, HikariCP, Micrometer/Actuator, React 18 + Vite, Docker Compose, GitHub Actions.
+**Stack:** Java 21, Spring Boot 4.1.x, PostgreSQL 16, Flyway, HikariCP, Micrometer/Actuator, React 18 + Vite, Docker Compose, GitHub Actions.
 
 **Repo:** `workforce-management-portal` (monorepo: `/backend`, `/frontend`, `/docs`, `/load`)
 
