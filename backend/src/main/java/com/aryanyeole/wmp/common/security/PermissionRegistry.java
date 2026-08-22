@@ -1,0 +1,72 @@
+package com.aryanyeole.wmp.common.security;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+import org.springframework.http.HttpMethod;
+import org.springframework.http.server.PathContainer;
+import org.springframework.stereotype.Component;
+import org.springframework.web.util.pattern.PathPattern;
+import org.springframework.web.util.pattern.PathPatternParser;
+
+import com.aryanyeole.wmp.auth.domain.RoleCode;
+
+import jakarta.annotation.PostConstruct;
+
+/**
+ * The single source of truth for route-level authorization.
+ *
+ * Every protected endpoint in the application is declared here exactly once.
+ * Controllers carry no security annotations; services carry no role checks.
+ * Adding an endpoint without adding it here means it is denied by default.
+ */
+@Component
+public class PermissionRegistry {
+
+    private static final Set<RoleCode> ALL_STAFF = Set.of(
+            RoleCode.EMPLOYEE, RoleCode.MANAGER, RoleCode.PAYROLL_ADMIN, RoleCode.HR_ADMIN);
+
+    private final PathPatternParser parser = PathPatternParser.defaultInstance;
+    private final List<CompiledRule> rules = new java.util.ArrayList<>();
+
+    private record CompiledRule(HttpMethod method, PathPattern pattern, RoutePermission permission) {
+    }
+
+    @PostConstruct
+    void compile() {
+        declare().forEach(p -> rules.add(
+                new CompiledRule(p.method(), parser.parse(p.pattern()), p)));
+    }
+
+    /**
+     * Resolves the rule governing a request, or empty if no rule matches
+     * (which callers must treat as deny).
+     */
+    public Optional<RoutePermission> resolve(HttpMethod method, String path) {
+        PathContainer container = PathContainer.parsePath(path);
+        return rules.stream()
+                .filter(r -> r.method().equals(method))
+                .filter(r -> r.pattern().matches(container))
+                .findFirst()
+                .map(CompiledRule::permission);
+    }
+
+    private List<RoutePermission> declare() {
+        return List.of(
+                // ---- Expense ----
+                new RoutePermission(HttpMethod.POST, "/api/v1/expenses", ALL_STAFF, false),
+                new RoutePermission(HttpMethod.GET, "/api/v1/expenses", ALL_STAFF, true),
+                new RoutePermission(HttpMethod.GET, "/api/v1/expenses/categories", ALL_STAFF, false),
+                new RoutePermission(HttpMethod.GET, "/api/v1/expenses/approvals",
+                        Set.of(RoleCode.MANAGER, RoleCode.PAYROLL_ADMIN), true),
+                new RoutePermission(HttpMethod.GET, "/api/v1/expenses/{id}", ALL_STAFF, true),
+                new RoutePermission(HttpMethod.PATCH, "/api/v1/expenses/{id}", ALL_STAFF, true),
+                new RoutePermission(HttpMethod.DELETE, "/api/v1/expenses/{id}", ALL_STAFF, true),
+                new RoutePermission(HttpMethod.POST, "/api/v1/expenses/{id}/submit", ALL_STAFF, true),
+                new RoutePermission(HttpMethod.POST, "/api/v1/expenses/{id}/approve",
+                        Set.of(RoleCode.MANAGER, RoleCode.PAYROLL_ADMIN), true),
+                new RoutePermission(HttpMethod.POST, "/api/v1/expenses/{id}/reject",
+                        Set.of(RoleCode.MANAGER, RoleCode.PAYROLL_ADMIN), true));
+    }
+}

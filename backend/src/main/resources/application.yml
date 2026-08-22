@@ -28,3 +28,10 @@ management:
 logging:
   level:
     org.hibernate.SQL: INFO
+
+wmp:
+  jwt:
+    secret: ${JWT_SECRET:DttNcmgSsJTwzVUoGMgKB6hlgOcUqw/vf80yESLduxfXB2yECCyuGf7tBwR3E1v6}
+    access-token-ttl: PT30M
+    refresh-token-ttl: P7D
+    issuer: wmp
