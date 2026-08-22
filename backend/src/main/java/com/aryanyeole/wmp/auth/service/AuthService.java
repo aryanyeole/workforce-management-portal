@@ -2,6 +2,7 @@ package com.aryanyeole.wmp.auth.service;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.aryanyeole.wmp.auth.api.AuthResponse;
 import com.aryanyeole.wmp.auth.api.LoginRequest;
@@ -45,6 +46,13 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
     }
 
+    /**
+     * Read-only transaction, not just a boundary convention: employee and
+     * role are lazy associations, and open-in-view is off, so touching them
+     * in toPrincipal() after the repository call returns would otherwise
+     * throw LazyInitializationException.
+     */
+    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         UserAccount account = userAccountRepository.findByEmail(request.email())
                 .orElseThrow(() -> new UnauthorizedException(LOGIN_FAILURE_MESSAGE));
@@ -56,6 +64,7 @@ public class AuthService {
         return issueTokens(toPrincipal(account));
     }
 
+    @Transactional(readOnly = true)
     public AuthResponse refresh(RefreshRequest request) {
         AuthPrincipal principal;
         try {
