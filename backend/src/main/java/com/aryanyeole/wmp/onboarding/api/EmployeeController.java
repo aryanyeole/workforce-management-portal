@@ -1,5 +1,7 @@
 package com.aryanyeole.wmp.onboarding.api;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.aryanyeole.wmp.common.api.PageResponse;
 import com.aryanyeole.wmp.common.security.AuthPrincipal;
 import com.aryanyeole.wmp.onboarding.service.EmployeeService;
+import com.aryanyeole.wmp.onboarding.service.OnboardingTaskService;
 
 import jakarta.validation.Valid;
 
@@ -29,9 +32,11 @@ import jakarta.validation.Valid;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final OnboardingTaskService onboardingTaskService;
 
-    public EmployeeController(EmployeeService employeeService) {
+    public EmployeeController(EmployeeService employeeService, OnboardingTaskService onboardingTaskService) {
         this.employeeService = employeeService;
+        this.onboardingTaskService = onboardingTaskService;
     }
 
     @PostMapping
@@ -63,5 +68,18 @@ public class EmployeeController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         employeeService.delete(principal, id);
+    }
+
+    @GetMapping("/{id}/tasks")
+    public List<TaskResponse> listTasks(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        return onboardingTaskService.listForEmployee(principal, id);
+    }
+
+    @PostMapping("/{id}/tasks")
+    @ResponseStatus(HttpStatus.CREATED)
+    public TaskResponse createTask(@AuthenticationPrincipal AuthPrincipal principal,
+                                    @PathVariable Long id,
+                                    @Valid @RequestBody CreateTaskRequest request) {
+        return onboardingTaskService.createForEmployee(principal, id, request);
     }
 }
