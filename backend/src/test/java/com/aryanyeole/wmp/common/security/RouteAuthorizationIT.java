@@ -59,9 +59,12 @@ import io.jsonwebtoken.security.Keys;
  *
  * The role x route table (routeCases) is deliberately data-driven: adding a
  * new PermissionRegistry rule and a matching test case is a one-line change.
- * Expense/onboarding/payroll controllers don't exist yet (Phases 3-5), so a
- * "non-forbidden" case here may resolve as 404 rather than 200 — the point
- * of this suite is 403-vs-not-403, not full response correctness.
+ * Onboarding/payroll controllers don't exist yet (Phases 4-5), so for those
+ * routes a "non-forbidden" case may resolve as 404 rather than 200 — the
+ * point of this suite is 403-vs-not-403, not full response correctness.
+ * Expense-specific business rules (state machine 409s, self-approval,
+ * 404-not-403 ownership scoping) are covered in ExpenseLifecycleIT instead
+ * of here, to keep this table about authorization, not business logic.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
@@ -198,6 +201,9 @@ class RouteAuthorizationIT extends AbstractIntegrationTest {
                 new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/expenses", false),
                 new RouteCase(RoleCode.HR_ADMIN, HttpMethod.POST, "/api/v1/expenses", false),
                 new RouteCase(RoleCode.SYSTEM, HttpMethod.POST, "/api/v1/expenses", true),
+
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/expenses", false),
+                new RouteCase(RoleCode.SYSTEM, HttpMethod.GET, "/api/v1/expenses", true),
 
                 new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/expenses/categories", false),
                 new RouteCase(RoleCode.SYSTEM, HttpMethod.GET, "/api/v1/expenses/categories", true),
