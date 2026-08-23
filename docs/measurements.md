@@ -171,7 +171,22 @@ Bound parameters, confirmed via TRACE log for each request actually made against
 
 ---
 
-### HTTP end-to-end latency (p50)
+### HTTP end-to-end latency (p50) — **SUPERSEDED, see Task A below**
+
+> **This subsection's numbers are confounded and should not be cited.**
+> The measurement ran all 30 samples of page 1, then all 30 of page 100,
+> then 500, then 1000, sequentially, with no warmup. p50 *decreased*
+> monotonically with page depth (84.8ms → 79.6ms → 76.6ms → 70.7ms),
+> which has no plausible mechanism given the EXPLAIN plans above all cost
+> about the same — the actual cause was almost certainly JIT/connection
+> -pool warmup improving over the course of the run, correlated with
+> depth only because depth was measured in a fixed, blocked order. Task A
+> (below) fixes the method — discarded warmup, randomized order across
+> depths, p50 **and** p95 — and re-measures this same state (offset
+> pagination, no index) as the real baseline. The EXPLAIN (ANALYZE,
+> BUFFERS) plans and the Step 0 dataset-verification findings above are
+> unaffected by this — only the HTTP timing numbers immediately below are
+> superseded.
 
 **Method:** 30 sequential `GET` requests per page depth against the running app (`http://localhost:8080`, dev profile, same `PAYROLL_ADMIN` bearer token throughout), one request at a time (no concurrency), timed with `curl -w "%{time_total}"`. p50 is the median of each page's 30 samples.
 
@@ -181,6 +196,39 @@ Bound parameters, confirmed via TRACE log for each request actually made against
 | 100 | 30 | 0.0596 | 0.0796 | 0.1920 | 0.0839 |
 | 500 | 30 | 0.0590 | 0.0766 | 0.1078 | 0.0769 |
 | 1000 | 30 | 0.0460 | 0.0707 | 0.1147 | 0.0697 |
+
+---
+
+## Phase 6, Task A — Corrected HTTP measurement method, state 1 re-baselined
+
+**Date:** 2026-08-23
+**What changed and why:** the harness above conflated depth with measurement order. `load/measure_approvals_offset.sh` (new, committed) fixes this:
+
+- **Discarded warmup** — 20 requests per depth (80 total) run first and are thrown away, so JIT compilation, connection-pool establishment, and buffer-cache warming happen before any timed sample.
+- **Randomized order across depths** — the 400 timed requests (100 per depth × 4 depths) are shuffled into one randomized sequence (`shuf`) and issued in that order, not blocked by depth. Any warmup/thermal drift remaining after the discarded phase is now uncorrelated with depth instead of confounded with it.
+- **p50 and p95 reported, with n stated** — nearest-rank percentile over the sorted samples.
+
+Same app instance, same dev database (post-`load/seed.sql`, unchanged since Task 1/2), same `PAYROLL_ADMIN` principal (`katherine.johnson@wmp.dev`), same four depths (page 1/100/500/1000, size 20), same "no index" schema state — this is a like-for-like re-measurement, not a new scenario. Run twice to confirm reproducibility:
+
+**Run 1** (`./load/measure_approvals_offset.sh http://localhost:8080 "$TOKEN" 100 20`):
+```
+page1     n=100  min=0.0407 p50=0.0637 p95=0.0800 max=0.0844 mean=0.0656
+page100   n=100  min=0.0421 p50=0.0670 p95=0.0868 max=0.0960 mean=0.0683
+page500   n=100  min=0.0460 p50=0.0719 p95=0.0902 max=0.1020 mean=0.0746
+page1000  n=100  min=0.0432 p50=0.0716 p95=0.0922 max=0.0993 mean=0.0729
+```
+
+**Run 2** (same command, immediately after):
+```
+page1     n=100  min=0.0454 p50=0.0605 p95=0.0860 max=0.2167 mean=0.0663
+page100   n=100  min=0.0395 p50=0.0671 p95=0.0873 max=0.4579 mean=0.0754
+page500   n=100  min=0.0430 p50=0.0704 p95=0.0940 max=0.6498 mean=0.0797
+page1000  n=100  min=0.0407 p50=0.0707 p95=0.0894 max=0.3378 mean=0.0756
+```
+
+**Reading:** with the confound removed, p50 now shows a small, monotonic **increase** with depth (page 1 ≈ 60-64ms → page 1000 ≈ 71ms, both runs), consistent with the EXPLAIN findings — deeper pages sort marginally more rows before the top-N cutoff is decided (sort memory 29kB → 545kB → 2,867kB → 3,401kB across depths in the earlier plans) — but the effect is small, not the dramatic "deep pages are dramatically slower" story, because every depth still pays for the same full 70k-row `Seq Scan` and near-full sort regardless of offset. This matches, and firms up, the EXPLAIN-based conclusion already reached: **without an index, offset depth barely matters, because the dominant cost (full scan + full sort) is already paid at every depth.** State 2 (Task B: add the index) is where a real depth-dependent curve should appear, since an index removes the full-sort floor that's currently flattening these numbers.
+
+State 1 (offset, no index) is now considered the confirmed baseline for the 2×2 comparison in Task D.
 
 ---
 
