@@ -72,4 +72,23 @@ public class ExpenseController {
     public void delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         expenseService.delete(principal, id);
     }
+
+    @PostMapping("/{id}/submit")
+    public ExpenseResponse submit(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        return expenseService.submit(principal, id);
+    }
+
+    @PostMapping("/{id}/approve")
+    public ExpenseResponse approve(@AuthenticationPrincipal AuthPrincipal principal,
+                                    @PathVariable Long id,
+                                    @RequestBody(required = false) ApprovalDecisionRequest request) {
+        return expenseService.approve(principal, id, request);
+    }
+
+    @PostMapping("/{id}/reject")
+    public ExpenseResponse reject(@AuthenticationPrincipal AuthPrincipal principal,
+                                   @PathVariable Long id,
+                                   @RequestBody(required = false) ApprovalDecisionRequest request) {
+        return expenseService.reject(principal, id, request);
+    }
 }

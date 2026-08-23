@@ -10,12 +10,19 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.aryanyeole.wmp.auth.repository.UserAccountRepository;
 import com.aryanyeole.wmp.common.api.PageResponse;
+import com.aryanyeole.wmp.common.domain.ApprovalAction;
+import com.aryanyeole.wmp.common.domain.ApprovalEntityType;
+import com.aryanyeole.wmp.common.domain.ApprovalEvent;
 import com.aryanyeole.wmp.common.money.Money;
+import com.aryanyeole.wmp.common.repository.ApprovalEventRepository;
 import com.aryanyeole.wmp.common.security.AuthPrincipal;
 import com.aryanyeole.wmp.common.security.VisibilityScope;
 import com.aryanyeole.wmp.common.security.VisibilityScopeResolver;
+import com.aryanyeole.wmp.common.web.ConflictException;
 import com.aryanyeole.wmp.common.web.NotFoundException;
+import com.aryanyeole.wmp.expense.api.ApprovalDecisionRequest;
 import com.aryanyeole.wmp.expense.api.CreateExpenseRequest;
 import com.aryanyeole.wmp.expense.api.ExpenseCategoryResponse;
 import com.aryanyeole.wmp.expense.api.ExpenseResponse;
@@ -42,15 +49,21 @@ public class ExpenseService {
     private final ExpenseReportRepository expenseReportRepository;
     private final ExpenseCategoryRepository expenseCategoryRepository;
     private final EmployeeRepository employeeRepository;
+    private final UserAccountRepository userAccountRepository;
+    private final ApprovalEventRepository approvalEventRepository;
     private final VisibilityScopeResolver visibilityScopeResolver;
 
     public ExpenseService(ExpenseReportRepository expenseReportRepository,
                            ExpenseCategoryRepository expenseCategoryRepository,
                            EmployeeRepository employeeRepository,
+                           UserAccountRepository userAccountRepository,
+                           ApprovalEventRepository approvalEventRepository,
                            VisibilityScopeResolver visibilityScopeResolver) {
         this.expenseReportRepository = expenseReportRepository;
         this.expenseCategoryRepository = expenseCategoryRepository;
         this.employeeRepository = employeeRepository;
+        this.userAccountRepository = userAccountRepository;
+        this.approvalEventRepository = approvalEventRepository;
         this.visibilityScopeResolver = visibilityScopeResolver;
     }
 
@@ -118,6 +131,64 @@ public class ExpenseService {
         return expenseCategoryRepository.findAll().stream()
                 .map(ExpenseMapper::toCategoryResponse)
                 .toList();
+    }
+
+    @Transactional
+    public ExpenseResponse submit(AuthPrincipal principal, Long id) {
+        ExpenseReport report = findVisible(id, ownScope(principal));
+        ExpenseTransitions.requireTransition(report.getStatus(), ExpenseStatus.SUBMITTED);
+
+        report.setStatus(ExpenseStatus.SUBMITTED);
+        report.setSubmittedAt(Instant.now());
+
+        recordEvent(report, principal, ApprovalAction.SUBMITTED, null);
+        return ExpenseMapper.toResponse(report);
+    }
+
+    @Transactional
+    public ExpenseResponse approve(AuthPrincipal principal, Long id, ApprovalDecisionRequest request) {
+        return decide(principal, id, ExpenseStatus.APPROVED, ApprovalAction.APPROVED, request);
+    }
+
+    @Transactional
+    public ExpenseResponse reject(AuthPrincipal principal, Long id, ApprovalDecisionRequest request) {
+        return decide(principal, id, ExpenseStatus.REJECTED, ApprovalAction.REJECTED, request);
+    }
+
+    /**
+     * Shared by approve/reject: both look the report up in the approver's
+     * VisibilityScope (their team, or unrestricted for admin roles), both
+     * write an approval_events row, both set approver_id/approved_at. Only
+     * the target status, the recorded action, and the self-approval guard
+     * differ.
+     */
+    private ExpenseResponse decide(AuthPrincipal principal, Long id, ExpenseStatus targetStatus,
+                                    ApprovalAction action, ApprovalDecisionRequest request) {
+        ExpenseReport report = findVisible(id, visibilityScopeResolver.resolve(principal));
+
+        if (targetStatus == ExpenseStatus.APPROVED
+                && report.getEmployee().getId().equals(principal.employeeId())) {
+            throw new ConflictException("An approver may not approve their own expense report");
+        }
+
+        ExpenseTransitions.requireTransition(report.getStatus(), targetStatus);
+
+        report.setStatus(targetStatus);
+        report.setApprovedAt(Instant.now());
+        report.setApprover(userAccountRepository.getReferenceById(principal.userAccountId()));
+
+        recordEvent(report, principal, action, request == null ? null : request.comment());
+        return ExpenseMapper.toResponse(report);
+    }
+
+    private void recordEvent(ExpenseReport report, AuthPrincipal principal, ApprovalAction action, String comment) {
+        ApprovalEvent event = new ApprovalEvent();
+        event.setEntityType(ApprovalEntityType.EXPENSE_REPORT);
+        event.setEntityId(report.getId());
+        event.setActor(userAccountRepository.getReferenceById(principal.userAccountId()));
+        event.setAction(action);
+        event.setComment(comment);
+        approvalEventRepository.save(event);
     }
 
     private ExpenseCategory requireCategory(Long categoryId) {
