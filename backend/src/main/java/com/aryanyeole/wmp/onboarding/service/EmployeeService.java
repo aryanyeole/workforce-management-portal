@@ -31,10 +31,10 @@ import com.aryanyeole.wmp.onboarding.repository.EmployeeSpecifications;
  * domain (see EmployeeSpecifications for the one adaptation the Employee
  * entity itself needed).
  *
- * requireVisible is package-private and used by OnboardingTaskService /
- * OnboardingDocumentService too (same package): "can this principal act
- * on employee #id" is exactly the same question there, not a parallel
- * check.
+ * requireVisible is used by OnboardingTaskService / OnboardingDocumentService
+ * (same package) and, as of Phase 5, PayrollReadService (a different
+ * package — hence public): "can this principal act on employee #id" is
+ * exactly the same question in every case, not a parallel check.
  */
 @Service
 public class EmployeeService {
@@ -124,8 +124,13 @@ public class EmployeeService {
      * Resolves the caller's VisibilityScope and fetches employee #id within
      * it, or 404 — same predicate whether id is out of scope or genuinely
      * doesn't exist, so existence is never leaked (ADR 0001).
+     *
+     * Public (not package-private) as of Phase 5: PayrollReadService's
+     * payslips endpoint reuses this exact "is employee #id visible to this
+     * principal" question across the onboarding/payroll package boundary —
+     * same method, same VisibilityScope mechanism, not a parallel check.
      */
-    Employee requireVisible(AuthPrincipal principal, Long id) {
+    public Employee requireVisible(AuthPrincipal principal, Long id) {
         Specification<Employee> spec = EmployeeSpecifications.hasId(id)
                 .and(visibleSpec(visibilityScopeResolver.resolve(principal)));
         return employeeRepository.findOne(spec).orElseThrow(() -> new NotFoundException(NOT_FOUND_MESSAGE));
