@@ -14,10 +14,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.aryanyeole.wmp.common.api.PageResponse;
 import com.aryanyeole.wmp.common.security.AuthPrincipal;
 import com.aryanyeole.wmp.onboarding.service.EmployeeService;
+import com.aryanyeole.wmp.onboarding.service.OnboardingDocumentService;
 import com.aryanyeole.wmp.onboarding.service.OnboardingTaskService;
 
 import jakarta.validation.Valid;
@@ -33,10 +35,14 @@ public class EmployeeController {
 
     private final EmployeeService employeeService;
     private final OnboardingTaskService onboardingTaskService;
+    private final OnboardingDocumentService onboardingDocumentService;
 
-    public EmployeeController(EmployeeService employeeService, OnboardingTaskService onboardingTaskService) {
+    public EmployeeController(EmployeeService employeeService,
+                               OnboardingTaskService onboardingTaskService,
+                               OnboardingDocumentService onboardingDocumentService) {
         this.employeeService = employeeService;
         this.onboardingTaskService = onboardingTaskService;
+        this.onboardingDocumentService = onboardingDocumentService;
     }
 
     @PostMapping
@@ -81,5 +87,20 @@ public class EmployeeController {
                                     @PathVariable Long id,
                                     @Valid @RequestBody CreateTaskRequest request) {
         return onboardingTaskService.createForEmployee(principal, id, request);
+    }
+
+    @PostMapping(path = "/{id}/documents", consumes = "multipart/form-data")
+    @ResponseStatus(HttpStatus.CREATED)
+    public DocumentResponse uploadDocument(@AuthenticationPrincipal AuthPrincipal principal,
+                                            @PathVariable Long id,
+                                            @RequestParam("documentType") String documentType,
+                                            @RequestParam("file") MultipartFile file) {
+        return onboardingDocumentService.upload(principal, id, documentType, file);
+    }
+
+    @GetMapping("/{id}/documents")
+    public List<DocumentResponse> listDocuments(@AuthenticationPrincipal AuthPrincipal principal,
+                                                 @PathVariable Long id) {
+        return onboardingDocumentService.list(principal, id);
     }
 }

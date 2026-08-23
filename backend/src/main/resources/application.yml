@@ -15,6 +15,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  servlet:
+    multipart:
+      # Deliberately above wmp.onboarding.document-storage.max-file-size, so
+      # our own validation (a clean 400 ProblemDetail) fires first and this
+      # is only an outer safety net.
+      max-file-size: 20MB
+      max-request-size: 20MB
 
 management:
   endpoints:
@@ -35,3 +42,8 @@ wmp:
     access-token-ttl: PT30M
     refresh-token-ttl: P7D
     issuer: wmp
+  onboarding:
+    document-storage:
+      base-path: ${WMP_DOCUMENT_STORAGE_PATH:./data/onboarding-documents}
+      max-file-size: 10MB
+      allowed-content-types: application/pdf,image/png,image/jpeg

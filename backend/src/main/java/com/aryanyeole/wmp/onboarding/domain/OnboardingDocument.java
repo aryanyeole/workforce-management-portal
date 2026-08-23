@@ -40,4 +40,12 @@ public class OnboardingDocument extends BaseEntity {
 
     @Column(name = "uploaded_at", nullable = false)
     private Instant uploadedAt;
+
+    /** V4 migration — the MIME type validated at upload time, kept for display/audit. */
+    @Column(name = "content_type")
+    private String contentType;
+
+    /** V4 migration. */
+    @Column(name = "file_size_bytes")
+    private Long fileSizeBytes;
 }
