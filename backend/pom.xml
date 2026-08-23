@@ -131,6 +131,17 @@
 			<version>0.12.6</version>
 			<scope>runtime</scope>
 		</dependency>
+		<!--
+			springdoc 2.x targets Spring Boot 3 / Spring Framework 6 only.
+			3.1.0 is the line built against spring-boot-starter-parent 4.1.0,
+			matching this project's Boot 4.1.1 — confirmed via its POM on
+			Maven Central before adding, per the Phase 3 task constraint.
+		-->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.1.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
