@@ -53,4 +53,8 @@ public class ExpenseReport extends BaseEntity {
 
     @Column(name = "approved_at")
     private Instant approvedAt;
+
+    /** Soft delete (V2 migration) — null means not deleted. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 }
