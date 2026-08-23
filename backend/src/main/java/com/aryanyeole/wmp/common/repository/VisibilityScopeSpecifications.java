@@ -18,9 +18,12 @@ import jakarta.persistence.criteria.Root;
  * shapes serve expense, payroll, and onboarding without re-deciding the
  * role-to-scope mapping per domain (see ADR 0001).
  *
- * Returns {@code null} for Unrestricted, which is the documented Spring Data
- * JPA convention for "no restriction" — {@link Specification#where} and
- * {@link Specification#and} both treat a null component as a pass-through.
+ * Unrestricted returns an always-true predicate rather than null: despite
+ * some Spring Data JPA docs suggesting {@code Specification.and(null)} is a
+ * no-op pass-through, this version's default implementation rejects a null
+ * argument outright (InvalidDataAccessApiUsageException: "Other
+ * specification must not be null"), so this stays explicit instead of
+ * relying on that.
  */
 public final class VisibilityScopeSpecifications {
 
@@ -30,7 +33,7 @@ public final class VisibilityScopeSpecifications {
     public static <T> Specification<T> forEmployeePath(
             VisibilityScope scope, Function<Root<T>, Path<Employee>> employeePath) {
         return switch (scope) {
-            case VisibilityScope.Unrestricted ignored -> null;
+            case VisibilityScope.Unrestricted ignored -> (root, query, cb) -> cb.conjunction();
             case VisibilityScope.Self(Long employeeId) -> (root, query, cb) ->
                     cb.equal(employeePath.apply(root).get("id"), employeeId);
             case VisibilityScope.SelfAndManagedTeam(Long employeeId) -> (root, query, cb) -> cb.or(
