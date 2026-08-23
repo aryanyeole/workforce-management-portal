@@ -29,6 +29,14 @@ public class PermissionRegistry {
 
     private static final Set<RoleCode> ALL_ROLES = Set.of(RoleCode.values());
 
+    /**
+     * Onboarding is HR-flavored, not payroll-flavored: PAYROLL_ADMIN and
+     * SYSTEM have no declared involvement in any onboarding route, unlike
+     * ALL_STAFF which includes PAYROLL_ADMIN for expense.
+     */
+    private static final Set<RoleCode> ONBOARDING_STAFF = Set.of(
+            RoleCode.EMPLOYEE, RoleCode.MANAGER, RoleCode.HR_ADMIN);
+
     private final PathPatternParser parser = PathPatternParser.defaultInstance;
     private final List<CompiledRule> rules = new java.util.ArrayList<>();
 
@@ -91,6 +99,26 @@ public class PermissionRegistry {
                 new RoutePermission(HttpMethod.POST, "/api/v1/expenses/{id}/approve",
                         Set.of(RoleCode.MANAGER, RoleCode.PAYROLL_ADMIN), true),
                 new RoutePermission(HttpMethod.POST, "/api/v1/expenses/{id}/reject",
-                        Set.of(RoleCode.MANAGER, RoleCode.PAYROLL_ADMIN), true));
+                        Set.of(RoleCode.MANAGER, RoleCode.PAYROLL_ADMIN), true),
+
+                // ---- Onboarding ----
+                new RoutePermission(HttpMethod.POST, "/api/v1/onboarding/employees",
+                        Set.of(RoleCode.HR_ADMIN), false),
+                new RoutePermission(HttpMethod.GET, "/api/v1/onboarding/employees", ONBOARDING_STAFF, true),
+                new RoutePermission(HttpMethod.GET, "/api/v1/onboarding/employees/{id}", ONBOARDING_STAFF, true),
+                new RoutePermission(HttpMethod.PATCH, "/api/v1/onboarding/employees/{id}",
+                        Set.of(RoleCode.HR_ADMIN), true),
+                new RoutePermission(HttpMethod.DELETE, "/api/v1/onboarding/employees/{id}",
+                        Set.of(RoleCode.HR_ADMIN), true),
+                new RoutePermission(HttpMethod.GET, "/api/v1/onboarding/employees/{id}/tasks",
+                        ONBOARDING_STAFF, true),
+                new RoutePermission(HttpMethod.POST, "/api/v1/onboarding/employees/{id}/tasks",
+                        Set.of(RoleCode.HR_ADMIN, RoleCode.MANAGER), true),
+                new RoutePermission(HttpMethod.POST, "/api/v1/onboarding/employees/{id}/documents",
+                        ONBOARDING_STAFF, true),
+                new RoutePermission(HttpMethod.GET, "/api/v1/onboarding/employees/{id}/documents",
+                        ONBOARDING_STAFF, true),
+                new RoutePermission(HttpMethod.PATCH, "/api/v1/onboarding/tasks/{taskId}",
+                        ONBOARDING_STAFF, true));
     }
 }

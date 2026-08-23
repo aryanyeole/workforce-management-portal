@@ -47,7 +47,8 @@ class EmployeeRepositoryIT extends AbstractIntegrationTest {
 
         assertThat(reloaded).isPresent();
         assertThat(reloaded.get().getEmail()).isEqualTo("ada.lovelace@example.com");
-        assertThat(reloaded.get().getEmploymentStatus()).isEqualTo(EmploymentStatus.ACTIVE);
+        // Phase 4: new employees default to PENDING, not ACTIVE (see EmploymentStatus).
+        assertThat(reloaded.get().getEmploymentStatus()).isEqualTo(EmploymentStatus.PENDING);
         assertThat(reloaded.get().getDepartment().getName()).isEqualTo("Engineering");
         assertThat(reloaded.get().getCreatedAt()).isNotNull();
         assertThat(reloaded.get().getUpdatedAt()).isNotNull();

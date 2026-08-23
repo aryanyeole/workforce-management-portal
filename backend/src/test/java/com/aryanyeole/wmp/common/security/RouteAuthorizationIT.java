@@ -235,6 +235,51 @@ class RouteAuthorizationIT extends AbstractIntegrationTest {
                 new RouteCase(RoleCode.MANAGER, HttpMethod.POST, "/api/v1/expenses/1/reject", false),
                 new RouteCase(RoleCode.EMPLOYEE, HttpMethod.POST, "/api/v1/expenses/1/reject", true),
 
+                // ---- Onboarding: HR_ADMIN-only mutations ----
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.POST, "/api/v1/onboarding/employees", false),
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.POST, "/api/v1/onboarding/employees", true),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.POST, "/api/v1/onboarding/employees", true),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/onboarding/employees", true),
+
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.PATCH, "/api/v1/onboarding/employees/1", false),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.PATCH, "/api/v1/onboarding/employees/1", true),
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.PATCH, "/api/v1/onboarding/employees/1", true),
+
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.DELETE, "/api/v1/onboarding/employees/1", false),
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.DELETE, "/api/v1/onboarding/employees/1", true),
+
+                // ---- Onboarding: ONBOARDING_STAFF reads (PAYROLL_ADMIN/SYSTEM excluded) ----
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/onboarding/employees", false),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.GET, "/api/v1/onboarding/employees", false),
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.GET, "/api/v1/onboarding/employees", false),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/onboarding/employees", true),
+                new RouteCase(RoleCode.SYSTEM, HttpMethod.GET, "/api/v1/onboarding/employees", true),
+
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/onboarding/employees/1", false),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/onboarding/employees/1", true),
+
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/onboarding/employees/1/tasks", false),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/onboarding/employees/1/tasks", true),
+                new RouteCase(RoleCode.SYSTEM, HttpMethod.GET, "/api/v1/onboarding/employees/1/tasks", true),
+
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.POST, "/api/v1/onboarding/employees/1/tasks", false),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.POST, "/api/v1/onboarding/employees/1/tasks", false),
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.POST, "/api/v1/onboarding/employees/1/tasks", true),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/onboarding/employees/1/tasks", true),
+
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.POST, "/api/v1/onboarding/employees/1/documents", false),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/onboarding/employees/1/documents", true),
+
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/onboarding/employees/1/documents", false),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/onboarding/employees/1/documents", true),
+                new RouteCase(RoleCode.SYSTEM, HttpMethod.GET, "/api/v1/onboarding/employees/1/documents", true),
+
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.PATCH, "/api/v1/onboarding/tasks/1", false),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.PATCH, "/api/v1/onboarding/tasks/1", false),
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.PATCH, "/api/v1/onboarding/tasks/1", false),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.PATCH, "/api/v1/onboarding/tasks/1", true),
+                new RouteCase(RoleCode.SYSTEM, HttpMethod.PATCH, "/api/v1/onboarding/tasks/1", true),
+
                 // /auth/me: every role, SYSTEM included, is allowed
                 new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/auth/me", false),
                 new RouteCase(RoleCode.MANAGER, HttpMethod.GET, "/api/v1/auth/me", false),
