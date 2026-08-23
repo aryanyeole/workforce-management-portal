@@ -239,3 +239,111 @@ This is the important, slightly counter-intuitive result, and I'm reporting it a
 That does not mean offset pagination is fine here — it means the current bottleneck is "no index at all," which is Phase 7's job, deliberately not done in this phase. What keyset pagination (Task 3/4) changes even without an index: its `WHERE (submitted_at, id) < (?, ?)` shrinks the candidate row set as paging progresses — rows already "seen" stop matching the predicate — whereas `OFFSET` always sorts the same full ~21k-row matching set no matter how deep the page. That's a real, distinct, measurable difference Task 4 will capture. It is a different claim from "removes the index-free full scan," which no pagination style can do by itself — composite indexing stays out of scope for this phase.
 
 **Constraints followed:** no application code or config file changed (logging enabled via CLI args only); no index added; `V1__baseline.sql` untouched; `application.yml` untouched.
+
+---
+
+## Phase 6, Task B — State 2: composite (partial) index + offset
+
+**Date:** 2026-08-23
+**Migration:** `V7__expense_reports_pending_queue_index.sql` — `CREATE INDEX idx_expense_reports_pending_queue ON expense_reports (submitted_at DESC) WHERE status = 'SUBMITTED' AND deleted_at IS NULL;`. Applied via Flyway (app startup against the dev `wmp-db`), then `ANALYZE expense_reports;` run directly. Full derivation and the composite-vs-partial reasoning are in the migration file's header comment — summary: the query's equality-filtered columns (`status`, `deleted_at`) and its sort column (`submitted_at DESC`) are the composite-index derivation, but since this endpoint only ever queries `status = 'SUBMITTED'`, that equality dimension folds into a partial predicate instead of stored key data — smaller index, and DRAFT-forever rows never enter it. No application code changed.
+
+### Confirming the index is actually used, and what happens to the Sort node
+
+`EXPLAIN (ANALYZE, BUFFERS)` on the same real SQL as Task A/Task 2 (`status='SUBMITTED'`, `1=1` for PAYROLL_ADMIN's `Unrestricted` scope), same four depths:
+
+**Page 1 (offset 0):**
+```
+ Limit  (cost=0.29..9.47 rows=20 width=114) (actual time=0.057..0.147 rows=20 loops=1)
+   Buffers: shared hit=20 read=2
+   ->  Index Scan using idx_expense_reports_pending_queue on expense_reports er1_0  (cost=0.29..9564.08 rows=20823 width=114) (actual time=0.055..0.142 rows=20 loops=1)
+         Buffers: shared hit=20 read=2
+ Planning:
+   Buffers: shared hit=186 read=1
+ Planning Time: 1.859 ms
+ Execution Time: 0.216 ms
+```
+
+**Page 100 (offset 1,980):**
+```
+ Limit  (cost=909.68..918.87 rows=20 width=114) (actual time=2.598..2.631 rows=20 loops=1)
+   Buffers: shared hit=2001 read=5
+   ->  Index Scan using idx_expense_reports_pending_queue on expense_reports er1_0  (cost=0.29..9564.08 rows=20823 width=114) (actual time=0.034..2.504 rows=2000 loops=1)
+         Buffers: shared hit=2001 read=5
+ Planning:
+   Buffers: shared hit=169
+ Planning Time: 1.671 ms
+ Execution Time: 2.709 ms
+```
+
+**Page 500 (offset 9,980):**
+```
+ Limit  (cost=4375.41..4375.46 rows=20 width=114) (actual time=34.643..34.661 rows=20 loops=1)
+   Buffers: shared hit=1206 read=52
+   ->  Sort  (cost=4350.46..4402.52 rows=20823 width=114) (actual time=31.958..34.022 rows=10000 loops=1)
+         Sort Key: submitted_at DESC
+         Sort Method: top-N heapsort  Memory: 2867kB
+         Buffers: shared hit=1206 read=52
+         ->  Bitmap Heap Scan on expense_reports er1_0  (cost=349.61..2862.90 rows=20823 width=114) (actual time=2.550..11.488 rows=20976 loops=1)
+               Recheck Cond: ((status = 'SUBMITTED'::text) AND (deleted_at IS NULL))
+               Heap Blocks: exact=1196
+               Buffers: shared hit=1203 read=52
+               ->  Bitmap Index Scan on idx_expense_reports_pending_queue  (cost=0.00..344.40 rows=20823 width=0) (actual time=2.263..2.272 rows=20976 loops=1)
+                     Buffers: shared hit=7 read=52
+ Planning:
+   Buffers: shared hit=169
+ Planning Time: 1.916 ms
+ Execution Time: 35.127 ms
+```
+
+**Page 1000 (offset 19,980):**
+```
+ Limit  (cost=4406.47..4406.52 rows=20 width=114) (actual time=33.508..33.538 rows=20 loops=1)
+   Buffers: shared hit=1258
+   ->  Sort  (cost=4356.52..4408.58 rows=20823 width=114) (actual time=28.008..32.283 rows=20000 loops=1)
+         Sort Key: submitted_at DESC
+         Sort Method: quicksort  Memory: 3401kB
+         Buffers: shared hit=1258
+         ->  Bitmap Heap Scan on expense_reports er1_0  (cost=349.61..2862.90 rows=20823 width=114) (actual time=1.969..10.930 rows=20976 loops=1)
+               Recheck Cond: ((status = 'SUBMITTED'::text) AND (deleted_at IS NULL))
+               Heap Blocks: exact=1196
+               Buffers: shared hit=1255
+               ->  Bitmap Index Scan on idx_expense_reports_pending_queue  (cost=0.00..344.40 rows=20823 width=0) (actual time=1.668..1.688 rows=20976 loops=1)
+                     Buffers: shared hit=59
+ Planning:
+   Buffers: shared hit=169
+ Planning Time: 2.191 ms
+ Execution Time: 33.972 ms
+```
+
+**The finding is a plan flip, not a smooth curve.** At shallow offsets (page 1, page 100), the planner uses an ordered `Index Scan` on the new index directly — the `Sort` node is gone, exactly as expected, because the index already provides `submitted_at DESC` order. The scan only touches as many rows as it needs to walk past: **20 rows at page 1, 2,000 rows at page 100.** At deeper offsets (page 500, page 1000), the planner switches strategy entirely: a `Bitmap Index Scan` + `Bitmap Heap Scan` fetch **all 20,976** matching rows, followed by an explicit `Sort` and then `Limit`. This is a genuine cost-based decision — walking an ordered index one-by-one past offset+limit rows (10,000 / 20,000 of them) becomes more expensive than bitmap-scanning the whole matching set and sorting it, once offset+limit approaches the size of the matching set itself. The Sort node reappears at exactly the depths where this flip happens; it never disappeared for the wrong reason (index/query order mismatch) — it only reappears once the planner deliberately abandons the index-ordered path.
+
+| Page | Offset | Plan | Rows touched | Execution Time | Buffers (top node) |
+|---|---|---|---|---|---|
+| 1 | 0 | Index Scan (ordered) | 20 | 0.216 ms | hit=20 read=2 |
+| 100 | 1,980 | Index Scan (ordered) | 2,000 | 2.709 ms | hit=2001 read=5 |
+| 500 | 9,980 | Bitmap Heap Scan + Sort | 20,976 | 35.127 ms | hit=1206 read=52 |
+| 1000 | 19,980 | Bitmap Heap Scan + Sort | 20,976 | 33.972 ms | hit=1258 read=0 |
+
+Compare to state 1 (no index, Task A): every depth cost 14-23 ms via a full `Seq Scan` + near-full sort, regardless of offset. State 2 is **faster at shallow depths** (0.2 ms and 2.7 ms vs. ~14-22 ms) but **not faster, and by execution time slightly slower, at deep depths** (35.1 ms / 34.0 ms vs. 21.3-22.7 ms) — the index helps enormously when it can be walked directly, and stops helping (reverting to roughly full-scan-and-sort behavior, plus the bitmap-scan overhead) once the offset is deep enough that the planner abandons the ordered path.
+
+### HTTP end-to-end latency (same harness as Task A: discarded warmup, randomized order, p50/p95, n=100/depth, two runs)
+
+**Run 1:**
+```
+page1     n=100  min=0.0208 p50=0.0313 p95=0.0541 max=0.0639 mean=0.0336
+page100   n=100  min=0.0200 p50=0.0323 p95=0.0494 max=0.0638 mean=0.0338
+page500   n=100  min=0.0362 p50=0.0491 p95=0.0759 max=0.0789 mean=0.0517
+page1000  n=100  min=0.0335 p50=0.0469 p95=0.0760 max=0.0895 mean=0.0511
+```
+
+**Run 2:**
+```
+page1     n=100  min=0.0191 p50=0.0280 p95=0.0374 max=0.0604 mean=0.0281
+page100   n=100  min=0.0179 p50=0.0302 p95=0.0469 max=0.0625 mean=0.0305
+page500   n=100  min=0.0338 p50=0.0470 p95=0.0672 max=0.0734 mean=0.0476
+page1000  n=100  min=0.0320 p50=0.0424 p95=0.0604 max=0.0693 mean=0.0436
+```
+
+Both runs show the same pattern the EXPLAIN plans predict: page 1/100 (~28-32 ms p50) cluster together, page 500/1000 (~42-49 ms p50) cluster together, with the jump landing between page 100 and page 500 — matching where the plan flips from ordered `Index Scan` to `Bitmap Heap Scan` + `Sort`. Degradation with depth **did appear**, as expected, once the index existed — but as a step at the plan-flip boundary, not a smooth monotonic curve.
+
+State 2 (offset + partial index) is the confirmed second cell of the Task D 2×2 comparison.

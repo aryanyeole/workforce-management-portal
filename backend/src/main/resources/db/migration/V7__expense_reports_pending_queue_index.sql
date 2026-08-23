@@ -1,0 +1,49 @@
+-- V7__expense_reports_pending_queue_index.sql
+-- Reason: Phase 6 Task B. GET /api/v1/expenses/approvals (ExpenseReportRepository
+-- .findPendingApprovals) issues:
+--
+--   SELECT ... FROM expense_reports
+--   WHERE deleted_at IS NULL AND status = ? AND <visibility predicate>
+--   ORDER BY submitted_at DESC
+--   OFFSET ? ROWS FETCH FIRST ? ROWS ONLY
+--
+-- status is always bound to 'SUBMITTED' by this endpoint — it is the only
+-- place expense_reports is filtered this way, and it never queries any
+-- other status value. Derivation: an equality-filtered column belongs
+-- before a sort column in a composite index (status, submitted_at DESC),
+-- with DESC matching ORDER BY submitted_at DESC so the planner can walk
+-- the index directly instead of sorting.
+--
+-- Refined from that baseline to a PARTIAL index rather than a full
+-- composite one: once scoped to status = 'SUBMITTED', status is constant
+-- within the index and contributes no selectivity as stored key data —
+-- the equality-filter dimension folds into the partial predicate instead
+-- of being indexed. This is deliberate, not a default:
+--   - ~30% of expense_reports are SUBMITTED in the seeded dataset
+--     (docs/measurements.md) — a partial index here is roughly 30% the
+--     size of the full-table composite alternative.
+--   - The other statuses (DRAFT permanently, APPROVED/REJECTED once
+--     decided) are never queried through this endpoint; a full index
+--     would carry key data for all of them for no benefit here.
+--   - Every write to a DRAFT report that never gets submitted (~20% of
+--     rows) never touches this index at all — a full index would still
+--     pay maintenance cost on every one of those writes.
+--
+-- deleted_at IS NULL is folded into the same partial predicate: it is
+-- true for 100% of current rows, but it's part of every expense query
+-- (ExpenseSpecifications.notDeleted()), so encoding it here means the
+-- index's scope matches the query's WHERE clause exactly, with no
+-- residual Filter needed at all.
+--
+-- This is not a composite index in the Phase 7 sense (no second column
+-- besides the sort key) — that is intentional per the above, not an
+-- oversight. Single column, single direction, matching the one ORDER BY
+-- this endpoint issues today: submitted_at DESC only, no id tiebreak,
+-- because the current offset query has no id in its ORDER BY. (Keyset
+-- pagination, if and when it's built, orders by (submitted_at, id) and
+-- would need its own justification for whether this index still serves
+-- it — not decided here.)
+
+CREATE INDEX idx_expense_reports_pending_queue
+    ON expense_reports (submitted_at DESC)
+    WHERE status = 'SUBMITTED' AND deleted_at IS NULL;
