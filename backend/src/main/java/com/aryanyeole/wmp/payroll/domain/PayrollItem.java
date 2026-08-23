@@ -31,9 +31,14 @@ public class PayrollItem extends BaseEntity {
     @Column(name = "gross_pay", nullable = false, precision = 12, scale = 2)
     private BigDecimal grossPay;
 
+    /** V6 migration — withholding, distinct from other deductions. */
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal tax = BigDecimal.ZERO;
+
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal deductions = BigDecimal.ZERO;
 
+    /** Always grossPay - tax - deductions — computed server-side, never trusted from a caller. */
     @Column(name = "net_pay", nullable = false, precision = 12, scale = 2)
     private BigDecimal netPay;
 }

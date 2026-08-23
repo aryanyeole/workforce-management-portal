@@ -5,5 +5,6 @@ public enum PayrollRunStatus {
     DRAFT,
     SUBMITTED,
     APPROVED,
-    REJECTED
+    REJECTED,
+    PAID
 }
