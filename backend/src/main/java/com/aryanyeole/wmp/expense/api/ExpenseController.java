@@ -55,6 +55,13 @@ public class ExpenseController {
         return expenseService.listCategories();
     }
 
+    @GetMapping("/approvals")
+    public PageResponse<ExpenseResponse> approvals(@AuthenticationPrincipal AuthPrincipal principal,
+                                                     @RequestParam(defaultValue = "0") int page,
+                                                     @RequestParam(defaultValue = "20") int size) {
+        return expenseService.pendingApprovals(principal, page, size);
+    }
+
     @GetMapping("/{id}")
     public ExpenseResponse get(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         return expenseService.get(principal, id);

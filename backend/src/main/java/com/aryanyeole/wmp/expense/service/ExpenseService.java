@@ -181,6 +181,18 @@ public class ExpenseService {
         return ExpenseMapper.toResponse(report);
     }
 
+    @Transactional(readOnly = true)
+    public PageResponse<ExpenseResponse> pendingApprovals(AuthPrincipal principal, int page, int size) {
+        Specification<ExpenseReport> approverScope = ExpenseSpecifications.visibleTo(
+                visibilityScopeResolver.resolve(principal));
+
+        Page<ExpenseResponse> results = expenseReportRepository
+                .findPendingApprovals(approverScope, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "submittedAt")))
+                .map(ExpenseMapper::toResponse);
+
+        return PageResponse.from(results);
+    }
+
     private void recordEvent(ExpenseReport report, AuthPrincipal principal, ApprovalAction action, String comment) {
         ApprovalEvent event = new ApprovalEvent();
         event.setEntityType(ApprovalEntityType.EXPENSE_REPORT);
