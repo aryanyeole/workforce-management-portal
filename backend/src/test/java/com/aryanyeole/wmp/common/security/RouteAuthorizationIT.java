@@ -280,6 +280,44 @@ class RouteAuthorizationIT extends AbstractIntegrationTest {
                 new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.PATCH, "/api/v1/onboarding/tasks/1", true),
                 new RouteCase(RoleCode.SYSTEM, HttpMethod.PATCH, "/api/v1/onboarding/tasks/1", true),
 
+                // ---- Payroll: runs/items are PAYROLL_ADMIN-only, org-wide, no scoping ----
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs", false),
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs", true),
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.POST, "/api/v1/payroll/runs", true),
+
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/payroll/runs", false),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.GET, "/api/v1/payroll/runs", true),
+
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/payroll/runs/1", false),
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.GET, "/api/v1/payroll/runs/1", true),
+
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/payroll/runs/1/items", false),
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/payroll/runs/1/items", true),
+
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs/1/items", false),
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs/1/items", true),
+
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs/1/submit", false),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.POST, "/api/v1/payroll/runs/1/submit", true),
+
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs/1/approve", false),
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs/1/approve", true),
+
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs/1/reject", false),
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.POST, "/api/v1/payroll/runs/1/reject", true),
+
+                // Payslips ARE employee-owned: ALL_STAFF, SYSTEM excluded
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/payroll/employees/1/payslips", false),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.GET, "/api/v1/payroll/employees/1/payslips", false),
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/payroll/employees/1/payslips", false),
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.GET, "/api/v1/payroll/employees/1/payslips", false),
+                new RouteCase(RoleCode.SYSTEM, HttpMethod.GET, "/api/v1/payroll/employees/1/payslips", true),
+
+                new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.GET, "/api/v1/payroll/summary", false),
+                new RouteCase(RoleCode.HR_ADMIN, HttpMethod.GET, "/api/v1/payroll/summary", false),
+                new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/payroll/summary", true),
+                new RouteCase(RoleCode.MANAGER, HttpMethod.GET, "/api/v1/payroll/summary", true),
+
                 // /auth/me: every role, SYSTEM included, is allowed
                 new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/auth/me", false),
                 new RouteCase(RoleCode.MANAGER, HttpMethod.GET, "/api/v1/auth/me", false),

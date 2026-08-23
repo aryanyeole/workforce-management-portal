@@ -119,6 +119,30 @@ public class PermissionRegistry {
                 new RoutePermission(HttpMethod.GET, "/api/v1/onboarding/employees/{id}/documents",
                         ONBOARDING_STAFF, true),
                 new RoutePermission(HttpMethod.PATCH, "/api/v1/onboarding/tasks/{taskId}",
-                        ONBOARDING_STAFF, true));
+                        ONBOARDING_STAFF, true),
+
+                // ---- Payroll ----
+                // Runs/items are org-wide, not employee-owned (see PayrollService):
+                // PAYROLL_ADMIN is the only role admitted, and ownershipScoped is
+                // false throughout since no further row-level scoping ever applies.
+                new RoutePermission(HttpMethod.POST, "/api/v1/payroll/runs", Set.of(RoleCode.PAYROLL_ADMIN), false),
+                new RoutePermission(HttpMethod.GET, "/api/v1/payroll/runs", Set.of(RoleCode.PAYROLL_ADMIN), false),
+                new RoutePermission(HttpMethod.GET, "/api/v1/payroll/runs/{id}", Set.of(RoleCode.PAYROLL_ADMIN), false),
+                new RoutePermission(HttpMethod.GET, "/api/v1/payroll/runs/{id}/items",
+                        Set.of(RoleCode.PAYROLL_ADMIN), false),
+                new RoutePermission(HttpMethod.POST, "/api/v1/payroll/runs/{id}/items",
+                        Set.of(RoleCode.PAYROLL_ADMIN), false),
+                new RoutePermission(HttpMethod.POST, "/api/v1/payroll/runs/{id}/submit",
+                        Set.of(RoleCode.PAYROLL_ADMIN), false),
+                new RoutePermission(HttpMethod.POST, "/api/v1/payroll/runs/{id}/approve",
+                        Set.of(RoleCode.PAYROLL_ADMIN), false),
+                new RoutePermission(HttpMethod.POST, "/api/v1/payroll/runs/{id}/reject",
+                        Set.of(RoleCode.PAYROLL_ADMIN), false),
+
+                // Payslips ARE employee-owned — ALL_STAFF (SYSTEM excluded), row-scoped.
+                new RoutePermission(HttpMethod.GET, "/api/v1/payroll/employees/{employeeId}/payslips",
+                        ALL_STAFF, true),
+                new RoutePermission(HttpMethod.GET, "/api/v1/payroll/summary",
+                        Set.of(RoleCode.PAYROLL_ADMIN, RoleCode.HR_ADMIN), false));
     }
 }
