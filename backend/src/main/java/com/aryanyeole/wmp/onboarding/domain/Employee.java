@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.time.LocalDate;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -45,5 +46,9 @@ public class Employee extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "employment_status", nullable = false, columnDefinition = "text")
-    private EmploymentStatus employmentStatus = EmploymentStatus.ACTIVE;
+    private EmploymentStatus employmentStatus = EmploymentStatus.PENDING;
+
+    /** Soft delete (V3 migration) — null means not deleted. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 }

@@ -24,6 +24,7 @@ import com.aryanyeole.wmp.common.repository.DepartmentRepository;
 import com.aryanyeole.wmp.expense.domain.ExpenseCategory;
 import com.aryanyeole.wmp.expense.repository.ExpenseCategoryRepository;
 import com.aryanyeole.wmp.onboarding.domain.Employee;
+import com.aryanyeole.wmp.onboarding.domain.EmploymentStatus;
 import com.aryanyeole.wmp.onboarding.repository.EmployeeRepository;
 
 /**
@@ -132,6 +133,9 @@ public class DevDataSeeder implements ApplicationRunner {
                 created.setLastName(seed.lastName());
                 created.setEmail(seed.email());
                 created.setHireDate(LocalDate.of(2022, 1, 10));
+                // Seeded staff represent already-onboarded employees, not new
+                // hires — Employee's own default is PENDING as of Phase 4.
+                created.setEmploymentStatus(EmploymentStatus.ACTIVE);
                 if (seed.managerEmail() != null) {
                     created.setManager(byEmail.get(seed.managerEmail()));
                 }
