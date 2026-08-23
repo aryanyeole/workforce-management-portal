@@ -1,5 +1,6 @@
 package com.aryanyeole.wmp.payroll.service;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -9,13 +10,20 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.aryanyeole.wmp.auth.repository.UserAccountRepository;
 import com.aryanyeole.wmp.common.api.PageResponse;
+import com.aryanyeole.wmp.common.domain.ApprovalAction;
+import com.aryanyeole.wmp.common.domain.ApprovalEntityType;
+import com.aryanyeole.wmp.common.domain.ApprovalEvent;
 import com.aryanyeole.wmp.common.money.Money;
+import com.aryanyeole.wmp.common.repository.ApprovalEventRepository;
+import com.aryanyeole.wmp.common.security.AuthPrincipal;
 import com.aryanyeole.wmp.common.web.BadRequestException;
 import com.aryanyeole.wmp.common.web.ConflictException;
 import com.aryanyeole.wmp.common.web.NotFoundException;
 import com.aryanyeole.wmp.onboarding.domain.Employee;
 import com.aryanyeole.wmp.onboarding.repository.EmployeeRepository;
+import com.aryanyeole.wmp.payroll.api.ApprovalDecisionRequest;
 import com.aryanyeole.wmp.payroll.api.CreatePayrollItemRequest;
 import com.aryanyeole.wmp.payroll.api.CreatePayrollRunRequest;
 import com.aryanyeole.wmp.payroll.api.PayrollItemResponse;
@@ -42,13 +50,19 @@ public class PayrollService {
     private final PayrollRunRepository payrollRunRepository;
     private final PayrollItemRepository payrollItemRepository;
     private final EmployeeRepository employeeRepository;
+    private final UserAccountRepository userAccountRepository;
+    private final ApprovalEventRepository approvalEventRepository;
 
     public PayrollService(PayrollRunRepository payrollRunRepository,
                            PayrollItemRepository payrollItemRepository,
-                           EmployeeRepository employeeRepository) {
+                           EmployeeRepository employeeRepository,
+                           UserAccountRepository userAccountRepository,
+                           ApprovalEventRepository approvalEventRepository) {
         this.payrollRunRepository = payrollRunRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.employeeRepository = employeeRepository;
+        this.userAccountRepository = userAccountRepository;
+        this.approvalEventRepository = approvalEventRepository;
     }
 
     @Transactional
@@ -131,6 +145,70 @@ public class PayrollService {
             throw new ConflictException(
                     "Employee %d already has an item in this payroll run".formatted(request.employeeId()));
         }
+    }
+
+    /**
+     * Plain @Transactional, repository calls only — no manual DataSource or
+     * long-held connections. ROADMAP Phase 8 reproduces pool exhaustion
+     * against this exact endpoint; the leak it introduces lives elsewhere
+     * (a scheduled batch job), so this method must stay boring and
+     * innocent.
+     */
+    @Transactional
+    public PayrollRunResponse submit(AuthPrincipal principal, Long runId) {
+        PayrollRun run = requireRun(runId);
+        PayrollTransitions.requireTransition(run.getStatus(), PayrollRunStatus.SUBMITTED);
+
+        if (!payrollItemRepository.existsByPayrollRunId(runId)) {
+            throw new ConflictException("Cannot submit a payroll run with no items");
+        }
+
+        run.setStatus(PayrollRunStatus.SUBMITTED);
+        run.setSubmittedBy(userAccountRepository.getReferenceById(principal.userAccountId()));
+        run.setSubmittedAt(Instant.now());
+
+        recordEvent(run, principal, ApprovalAction.SUBMITTED, null);
+        return PayrollMapper.toResponse(run);
+    }
+
+    @Transactional
+    public PayrollRunResponse approve(AuthPrincipal principal, Long runId, ApprovalDecisionRequest request) {
+        return decide(principal, runId, PayrollRunStatus.APPROVED, ApprovalAction.APPROVED, request);
+    }
+
+    @Transactional
+    public PayrollRunResponse reject(AuthPrincipal principal, Long runId, ApprovalDecisionRequest request) {
+        return decide(principal, runId, PayrollRunStatus.REJECTED, ApprovalAction.REJECTED, request);
+    }
+
+    private PayrollRunResponse decide(AuthPrincipal principal, Long runId, PayrollRunStatus targetStatus,
+                                       ApprovalAction action, ApprovalDecisionRequest request) {
+        PayrollRun run = requireRun(runId);
+
+        if (targetStatus == PayrollRunStatus.APPROVED
+                && run.getSubmittedBy() != null
+                && run.getSubmittedBy().getId().equals(principal.userAccountId())) {
+            throw new ConflictException("A payroll run's submitter may not approve their own submission");
+        }
+
+        PayrollTransitions.requireTransition(run.getStatus(), targetStatus);
+
+        run.setStatus(targetStatus);
+        run.setApprovedBy(userAccountRepository.getReferenceById(principal.userAccountId()));
+        run.setApprovedAt(Instant.now());
+
+        recordEvent(run, principal, action, request == null ? null : request.comment());
+        return PayrollMapper.toResponse(run);
+    }
+
+    private void recordEvent(PayrollRun run, AuthPrincipal principal, ApprovalAction action, String comment) {
+        ApprovalEvent event = new ApprovalEvent();
+        event.setEntityType(ApprovalEntityType.PAYROLL_RUN);
+        event.setEntityId(run.getId());
+        event.setActor(userAccountRepository.getReferenceById(principal.userAccountId()));
+        event.setAction(action);
+        event.setComment(comment);
+        approvalEventRepository.save(event);
     }
 
     PayrollRun requireRun(Long id) {

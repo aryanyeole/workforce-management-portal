@@ -3,6 +3,7 @@ package com.aryanyeole.wmp.payroll.api;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.aryanyeole.wmp.common.api.PageResponse;
+import com.aryanyeole.wmp.common.security.AuthPrincipal;
 import com.aryanyeole.wmp.payroll.service.PayrollService;
 
 import jakarta.validation.Valid;
@@ -60,5 +62,24 @@ public class PayrollRunController {
     @ResponseStatus(HttpStatus.CREATED)
     public PayrollItemResponse createItem(@PathVariable Long id, @Valid @RequestBody CreatePayrollItemRequest request) {
         return payrollService.createItem(id, request);
+    }
+
+    @PostMapping("/{id}/submit")
+    public PayrollRunResponse submit(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        return payrollService.submit(principal, id);
+    }
+
+    @PostMapping("/{id}/approve")
+    public PayrollRunResponse approve(@AuthenticationPrincipal AuthPrincipal principal,
+                                       @PathVariable Long id,
+                                       @RequestBody(required = false) ApprovalDecisionRequest request) {
+        return payrollService.approve(principal, id, request);
+    }
+
+    @PostMapping("/{id}/reject")
+    public PayrollRunResponse reject(@AuthenticationPrincipal AuthPrincipal principal,
+                                      @PathVariable Long id,
+                                      @RequestBody(required = false) ApprovalDecisionRequest request) {
+        return payrollService.reject(principal, id, request);
     }
 }
