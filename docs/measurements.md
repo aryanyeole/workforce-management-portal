@@ -501,3 +501,106 @@ p50 is flat across all four depths in both runs (~21 ms run 1, ~24-26 ms run 2 �
 | page1000 | 0.0469 / 0.0424 ms | 0.0212 / 0.0255 ms |
 
 State 3 (keyset + existing partial index) is the confirmed third cell of the Task D 2×2 comparison.
+
+## Phase 6, Task D — State 4: keyset without the index, and the full 2×2
+
+**Date:** 2026-08-23
+**Change:** `idx_expense_reports_pending_queue` dropped directly on the dev database (`DROP INDEX`, not a migration), measured, then recreated with the exact same DDL as `V7__expense_reports_pending_queue_index.sql` and re-`ANALYZE`'d. No migration file touched; the index was confirmed back and in use (deep-cursor `EXPLAIN` below shows `Index Scan using idx_expense_reports_pending_queue` again) before this task ended.
+
+### Harness method (stated once — used identically for every state in this 2×2)
+
+HTTP numbers throughout are `load/measure_approvals_offset.sh` (offset states) or `load/measure_approvals_keyset.sh` (keyset states): discarded warmup (20 requests/depth), the timed requests for all four depths shuffled into one randomized sequence (not blocked by depth) so warmup/thermal drift can't correlate with depth, p50/p95 via nearest-rank percentile, n=100/depth, two runs per state. Same principal throughout (`katherine.johnson@wmp.dev`, `PAYROLL_ADMIN`, `VisibilityScope.Unrestricted`), same dev database contents (`load/seed.sql`, unchanged since Task 1).
+
+The four depths are "page 1/100/500/1000 at size 20" — offset 0 / 1,980 / 9,980 / 19,980. Offset pagination requests these directly via `page=`. Keyset pagination has no page parameter, so cursor-depth equivalence is established by walking `nextCursor` forward from the start and consuming exactly that many rows once, untimed, before any timed request — done in chunks of 100 rows/request (the endpoint's max page size) purely so setup finishes quickly; a cursor is an opaque marker for an exact row, so the page size used to reach it doesn't affect where it points. That walk lands on the same four boundary rows offset pagination uses (confirmed by reusing the same probe row, `submitted_at = 2024-09-28 05:39:20.648735+00, id = 100861`, for the deepest depth across Tasks B/C/D). The single next request at that boundary, `size=20`, is what gets timed, repeatedly, exactly as the offset harness reuses the same `page=N` parameter for every sample at that depth.
+
+### EXPLAIN: shallow and deep, no index
+
+**Shallow (first page, no cursor):**
+```
+ Limit  (cost=3684.81..3684.86 rows=21 width=114) (actual time=14.801..14.810 rows=21 loops=1)
+   Buffers: shared hit=2259
+   ->  Sort  (cost=3684.81..3736.44 rows=20652 width=114) (actual time=14.798..14.805 rows=21 loops=1)
+         Sort Key: submitted_at DESC, id DESC
+         Sort Method: top-N heapsort  Memory: 29kB
+         Buffers: shared hit=2259
+         ->  Seq Scan on expense_reports er1_0  (cost=0.00..3128.00 rows=20652 width=114) (actual time=0.577..9.416 rows=20976 loops=1)
+               Filter: ((deleted_at IS NULL) AND (status = 'SUBMITTED'::text))
+               Rows Removed by Filter: 49024
+               Buffers: shared hit=2253
+ Planning:
+   Buffers: shared hit=156
+ Planning Time: 1.947 ms
+ Execution Time: 14.886 ms
+```
+
+**Deep (cursor at `submitted_at=2024-09-28T05:39:20.648735Z, id=100861`, same boundary row as Task C):**
+```
+ Limit  (cost=3499.11..3499.16 rows=21 width=114) (actual time=10.432..10.442 rows=21 loops=1)
+   Buffers: shared hit=2259
+   ->  Sort  (cost=3499.11..3501.07 rows=783 width=114) (actual time=10.430..10.437 rows=21 loops=1)
+         Sort Key: submitted_at DESC, id DESC
+         Sort Method: top-N heapsort  Memory: 29kB
+         Buffers: shared hit=2259
+         ->  Seq Scan on expense_reports er1_0  (cost=0.00..3478.00 rows=783 width=114) (actual time=0.566..10.022 rows=996 loops=1)
+               Filter: ((deleted_at IS NULL) AND (status = 'SUBMITTED'::text) AND (ROW(submitted_at, id) < ROW('2024-09-28 05:39:20.648735+00'::timestamp with time zone, 100861)))
+               Rows Removed by Filter: 69004
+               Buffers: shared hit=2253
+ Planning:
+   Buffers: shared hit=152
+ Planning Time: 0.895 ms
+ Execution Time: 10.576 ms
+```
+
+Both plans pay a full `Seq Scan` across all 70,000 rows. The keyset predicate is doing its job — it shrinks the candidate set that reaches the final sort (996 rows at depth vs. 20,976 rows shallow, since everything "past" the cursor is filtered out) — but that reduction is invisible in execution time, because the `Seq Scan` itself, which must still touch every one of the 70,000 rows regardless of the filter, is the dominant cost (9.4-10.0 ms out of 10.6-14.9 ms total either way). Deep is marginally *faster* here (10.576 ms vs. 14.886 ms shallow) — noise at this scale, not a real trend; both numbers say the same thing: **without an index, cursor depth doesn't matter, because nothing here lets Postgres avoid scanning the whole table.**
+
+### HTTP end-to-end latency, no index (same harness, discarded warmup, randomized order, p50/p95, n=100/depth, two runs)
+
+**Run 1:**
+```
+page1     n=100  min=0.0303 p50=0.0400 p95=0.0505 max=0.0649 mean=0.0407
+page100   n=100  min=0.0301 p50=0.0407 p95=0.0566 max=0.0861 mean=0.0422
+page500   n=100  min=0.0278 p50=0.0379 p95=0.0525 max=0.0643 mean=0.0392
+page1000  n=100  min=0.0259 p50=0.0381 p95=0.0508 max=0.0633 mean=0.0381
+```
+
+**Run 2:**
+```
+page1     n=100  min=0.0282 p50=0.0470 p95=0.0624 max=0.0691 mean=0.0459
+page100   n=100  min=0.0283 p50=0.0461 p95=0.0560 max=0.0704 mean=0.0446
+page500   n=100  min=0.0258 p50=0.0435 p95=0.0589 max=0.0747 mean=0.0423
+page1000  n=100  min=0.0242 p50=0.0391 p95=0.0514 max=0.0582 mean=0.0388
+```
+
+Flat across depth in both runs (~38-47 ms), the same "depth doesn't matter" signature as state 1 — but roughly double state 3's flat ~21-26 ms, since every request here pays the full-table scan the index eliminates in state 3.
+
+### The full 2×2
+
+**Query execution time (`EXPLAIN ANALYZE`, ms):**
+
+| | No index | Index (`idx_expense_reports_pending_queue`) |
+|---|---|---|
+| **Offset** (state 1 / state 2) | page1 14.142, page100 21.500, page500 22.676, page1000 21.313 | page1 0.216, page100 2.709, page500 35.127, page1000 33.972 |
+| **Keyset** (state 4 / state 3) | shallow 14.886, deep 10.576 | shallow 0.907, deep 0.248 |
+
+**HTTP p50 (s), run 1 / run 2:**
+
+| | No index | Index |
+|---|---|---|
+| **Offset**, page1 | 0.0637 / 0.0605 | 0.0313 / 0.0280 |
+| **Offset**, page100 | 0.0670 / 0.0671 | 0.0323 / 0.0302 |
+| **Offset**, page500 | 0.0719 / 0.0704 | 0.0491 / 0.0470 |
+| **Offset**, page1000 | 0.0716 / 0.0707 | 0.0469 / 0.0424 |
+| **Keyset**, page1 | 0.0400 / 0.0470 | 0.0210 / 0.0242 |
+| **Keyset**, page100 | 0.0407 / 0.0461 | 0.0211 / 0.0262 |
+| **Keyset**, page500 | 0.0379 / 0.0435 | 0.0211 / 0.0247 |
+| **Keyset**, page1000 | 0.0381 / 0.0391 | 0.0212 / 0.0255 |
+
+### Which single change does nothing on its own
+
+Neither half of "keyset pagination + a matching index" is sufficient alone — each row and each column of the 2×2 makes a different half of that case:
+
+- **The index alone, keeping offset pagination (state 1 → state 2), only helps at shallow depth.** Page 1 drops from 14.1 ms to 0.2 ms, page 100 from 21.5 ms to 2.7 ms — a real, large win — but at page 500/1000 the planner abandons the ordered index walk for a `Bitmap Heap Scan` + `Sort` over the full matching set, landing at 35.1 ms / 34.0 ms: *worse* than the no-index baseline at the same depths (22.7 ms / 21.3 ms). Adding the index without changing the pagination style fixes shallow pages and leaves deep pages exactly as bad (arguably worse) as before, because `OFFSET` still forces the planner to materialize everything up to `offset+limit` one way or another.
+- **Keyset pagination alone, without the index (state 1 → state 4), does nothing.** Shallow and deep execution time (14.1-14.9 ms and 10.6-21.3 ms respectively across the two states) are in the same range regardless of pagination style, because both are dominated by the same full `Seq Scan` over 70,000 rows — the keyset predicate correctly shrinks the row count reaching the final sort, but there's no index for Postgres to use that predicate as a scan boundary with, so the scan itself, the actual bottleneck, is unchanged. HTTP p50 confirms it: state 4's ~38-47 ms is close to state 1's ~60-71 ms (better, since keyset's smaller post-filter sort still saves *something*, and HTTP overhead compresses the gap) but nowhere near state 3's flat ~21-26 ms, and — critically — state 4 still shows no depth-dependent degradation because there was never a depth-dependent *win* to lose: cost is flat because nothing here scales with depth in either direction.
+- **Only state 3 (keyset + index) is fast *and* flat.** It is the sole cell where deep pages cost the same as page 1 (query time 0.2-0.9 ms regardless of depth, HTTP p50 ~21-26 ms regardless of depth) — every other cell either degrades with depth (state 2), is uniformly slow (states 1 and 4), or both.
+
+State 4 (keyset, no index) completes the 2×2 for the Task D comparison.
