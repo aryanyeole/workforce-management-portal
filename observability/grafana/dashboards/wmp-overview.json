@@ -1,0 +1,117 @@
+{
+  "title": "WMP - Request Latency & Hikari Pool",
+  "uid": "wmp-overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP request latency (all routes)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Approvals queue & payroll-submit latency (Phase 8 watch paths)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.50, sum(rate(approvals_requests_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "approvals p50",
+          "refId": "A"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.95, sum(rate(approvals_requests_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "approvals p95",
+          "refId": "B"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.50, sum(rate(payroll_submit_requests_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "payroll.submit p50",
+          "refId": "C"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.95, sum(rate(payroll_submit_requests_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "payroll.submit p95",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "HikariCP pool state (Phase 8's primary diagnostic signal)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "hikaricp_connections_active{pool=\"HikariPool-1\"}",
+          "legendFormat": "active",
+          "refId": "A"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "hikaricp_connections_idle{pool=\"HikariPool-1\"}",
+          "legendFormat": "idle",
+          "refId": "B"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "hikaricp_connections_pending{pool=\"HikariPool-1\"}",
+          "legendFormat": "pending",
+          "refId": "C"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "increase(hikaricp_connections_timeout_total{pool=\"HikariPool-1\"}[$__rate_interval])",
+          "legendFormat": "timeouts (increase)",
+          "refId": "D"
+        }
+      ]
+    }
+  ]
+}

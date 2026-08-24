@@ -1,0 +1,14 @@
+# Phase 7: scrapes the backend app directly on the host, not a container —
+# the app runs via `mvnw spring-boot:run` on the host machine per CLAUDE.md,
+# it is not (yet) part of docker-compose itself. host.docker.internal is how
+# a container reaches the host on Docker Desktop; the compose service also
+# sets extra_hosts so this resolves the same way on Linux Docker Engine.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: wmp-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"]

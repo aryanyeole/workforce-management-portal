@@ -31,6 +31,16 @@ management:
   endpoint:
     health:
       show-details: always
+  metrics:
+    distribution:
+      # Publishes histogram buckets (not just client-computed percentiles)
+      # so Prometheus/Grafana can compute p50/p95/p99 server-side via
+      # histogram_quantile() — see observability/grafana/dashboards. Scoped
+      # to the routes Phase 7/8 actually watch, not every meter.
+      percentiles-histogram:
+        http.server.requests: true
+        approvals.requests: true
+        payroll.submit.requests: true
 
 logging:
   level:

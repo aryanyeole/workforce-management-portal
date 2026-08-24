@@ -16,5 +16,42 @@ services:
       timeout: 5s
       retries: 10
 
+  # Phase 7: `docker compose up` alone never starts these — only
+  # `docker compose --profile observability up -d` does. The backend app
+  # itself runs on the host (mvnw spring-boot:run), not in this compose
+  # file, so Prometheus scrapes it via host.docker.internal, not a service
+  # name.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: wmp-prometheus
+    profiles: ["observability"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      # host.docker.internal resolves automatically on Docker Desktop
+      # (Windows/Mac); this makes it resolve the same way on Linux Docker
+      # Engine too.
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: wmp-grafana
+    profiles: ["observability"]
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      # Dev-only convenience so the dashboard is screenshot-able without a
+      # login step — never appropriate outside a local/portfolio setup.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+
 volumes:
   wmp_pgdata:
