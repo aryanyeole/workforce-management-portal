@@ -383,4 +383,24 @@ class RouteAuthorizationIT extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
     }
+
+    @Test
+    void actuatorMetricsIsPublicWithNoToken() throws Exception {
+        // Phase 7: operational/scrape endpoint, not a business route — see
+        // PermissionRegistry.PUBLIC_PATTERNS.
+        mockMvc.perform(get("/actuator/metrics"))
+                .andExpect(status().isOk());
+    }
+
+    // No MockMvc test for /actuator/prometheus: under this test's
+    // @SpringBootTest(webEnvironment = MOCK) context, the PrometheusScrapeEndpoint
+    // bean itself is never registered (confirmed via /actuator's own discovery
+    // links — "prometheus" is absent from them here, though "health" and
+    // "metrics" are present), even though it registers and serves real
+    // Prometheus-format output correctly against the actual running app
+    // (verified manually — see docs/measurements.md Phase 7). This looks like
+    // a MockMvc/test-slice-specific gap in this Spring Boot 4.1 release, not
+    // an authorization or routing defect in this codebase; PermissionRegistry
+    // still declares it public (see PUBLIC_PATTERNS) for when a real server
+    // is running, which is what Prometheus/Grafana actually talk to.
 }

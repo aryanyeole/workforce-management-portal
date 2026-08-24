@@ -3,6 +3,9 @@ package com.aryanyeole.wmp.payroll.service;
 import java.time.Instant;
 import java.util.List;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -52,17 +55,20 @@ public class PayrollService {
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
     private final ApprovalEventRepository approvalEventRepository;
+    private final MeterRegistry meterRegistry;
 
     public PayrollService(PayrollRunRepository payrollRunRepository,
                            PayrollItemRepository payrollItemRepository,
                            EmployeeRepository employeeRepository,
                            UserAccountRepository userAccountRepository,
-                           ApprovalEventRepository approvalEventRepository) {
+                           ApprovalEventRepository approvalEventRepository,
+                           MeterRegistry meterRegistry) {
         this.payrollRunRepository = payrollRunRepository;
         this.payrollItemRepository = payrollItemRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
         this.approvalEventRepository = approvalEventRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
@@ -153,22 +159,32 @@ public class PayrollService {
      * against this exact endpoint; the leak it introduces lives elsewhere
      * (a scheduled batch job), so this method must stay boring and
      * innocent.
+     *
+     * Timed under "payroll.submit.requests" (Phase 7) — this is the exact
+     * path Phase 8's diagnosis watches for latency growth as the pool
+     * degrades, so it gets its own named timer rather than only showing up
+     * folded into the generic http.server.requests bucket.
      */
     @Transactional
     public PayrollRunResponse submit(AuthPrincipal principal, Long runId) {
-        PayrollRun run = requireRun(runId);
-        PayrollTransitions.requireTransition(run.getStatus(), PayrollRunStatus.SUBMITTED);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            PayrollRun run = requireRun(runId);
+            PayrollTransitions.requireTransition(run.getStatus(), PayrollRunStatus.SUBMITTED);
 
-        if (!payrollItemRepository.existsByPayrollRunId(runId)) {
-            throw new ConflictException("Cannot submit a payroll run with no items");
+            if (!payrollItemRepository.existsByPayrollRunId(runId)) {
+                throw new ConflictException("Cannot submit a payroll run with no items");
+            }
+
+            run.setStatus(PayrollRunStatus.SUBMITTED);
+            run.setSubmittedBy(userAccountRepository.getReferenceById(principal.userAccountId()));
+            run.setSubmittedAt(Instant.now());
+
+            recordEvent(run, principal, ApprovalAction.SUBMITTED, null);
+            return PayrollMapper.toResponse(run);
+        } finally {
+            sample.stop(meterRegistry.timer("payroll.submit.requests"));
         }
-
-        run.setStatus(PayrollRunStatus.SUBMITTED);
-        run.setSubmittedBy(userAccountRepository.getReferenceById(principal.userAccountId()));
-        run.setSubmittedAt(Instant.now());
-
-        recordEvent(run, principal, ApprovalAction.SUBMITTED, null);
-        return PayrollMapper.toResponse(run);
     }
 
     @Transactional

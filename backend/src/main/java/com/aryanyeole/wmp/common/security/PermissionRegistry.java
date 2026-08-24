@@ -68,6 +68,15 @@ public class PermissionRegistry {
             "/api/v1/auth/refresh",
             "/actuator/health",
             "/actuator/health/**",
+            // Operational/scrape endpoints (Phase 7), not business routes —
+            // no JWT-bearing client (Prometheus, a developer's browser) is
+            // expected to authenticate against these. Deliberately public
+            // rather than bypassing RouteAuthorizationFilter entirely, so
+            // this stays the one place that decides what's open.
+            "/actuator",
+            "/actuator/metrics",
+            "/actuator/metrics/**",
+            "/actuator/prometheus",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html");

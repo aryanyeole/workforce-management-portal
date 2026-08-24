@@ -3,6 +3,9 @@ package com.aryanyeole.wmp.expense.service;
 import java.time.Instant;
 import java.util.List;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -59,6 +62,7 @@ public class ExpenseService {
     private final UserAccountRepository userAccountRepository;
     private final ApprovalEventRepository approvalEventRepository;
     private final VisibilityScopeResolver visibilityScopeResolver;
+    private final MeterRegistry meterRegistry;
 
     public ExpenseService(ExpenseReportRepository expenseReportRepository,
                            ExpenseApprovalsKeysetRepository expenseApprovalsKeysetRepository,
@@ -66,7 +70,8 @@ public class ExpenseService {
                            EmployeeRepository employeeRepository,
                            UserAccountRepository userAccountRepository,
                            ApprovalEventRepository approvalEventRepository,
-                           VisibilityScopeResolver visibilityScopeResolver) {
+                           VisibilityScopeResolver visibilityScopeResolver,
+                           MeterRegistry meterRegistry) {
         this.expenseReportRepository = expenseReportRepository;
         this.expenseApprovalsKeysetRepository = expenseApprovalsKeysetRepository;
         this.expenseCategoryRepository = expenseCategoryRepository;
@@ -74,6 +79,7 @@ public class ExpenseService {
         this.userAccountRepository = userAccountRepository;
         this.approvalEventRepository = approvalEventRepository;
         this.visibilityScopeResolver = visibilityScopeResolver;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
@@ -198,32 +204,41 @@ public class ExpenseService {
      * ever reaches the query. VisibilityScope scoping is unchanged from
      * the offset implementation — only how the page boundary is
      * expressed has changed.
+     *
+     * Timed under "approvals.requests" (Phase 7) — Phase 8's diagnosis
+     * needs this path's latency visible on its own, not folded into the
+     * generic http.server.requests bucket for every route.
      */
     @Transactional(readOnly = true)
     public CursorPageResponse<ExpenseResponse> pendingApprovals(AuthPrincipal principal, String cursor, int size) {
-        int boundedSize = boundedApprovalsSize(size);
-        ApprovalsCursor decodedCursor = cursor == null ? null : ApprovalsCursor.decode(cursor);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            int boundedSize = boundedApprovalsSize(size);
+            ApprovalsCursor decodedCursor = cursor == null ? null : ApprovalsCursor.decode(cursor);
 
-        Specification<ExpenseReport> approverScope = ExpenseSpecifications.visibleTo(
-                visibilityScopeResolver.resolve(principal));
+            Specification<ExpenseReport> approverScope = ExpenseSpecifications.visibleTo(
+                    visibilityScopeResolver.resolve(principal));
 
-        // Fetch one extra row to learn whether more remain, instead of a
-        // second COUNT query — the whole point of not using offset/Page here.
-        Instant cursorSubmittedAt = decodedCursor == null ? null : decodedCursor.submittedAt();
-        Long cursorId = decodedCursor == null ? null : decodedCursor.id();
-        List<ExpenseReport> rows = expenseApprovalsKeysetRepository.findPage(
-                approverScope, cursorSubmittedAt, cursorId, boundedSize);
+            // Fetch one extra row to learn whether more remain, instead of a
+            // second COUNT query — the whole point of not using offset/Page here.
+            Instant cursorSubmittedAt = decodedCursor == null ? null : decodedCursor.submittedAt();
+            Long cursorId = decodedCursor == null ? null : decodedCursor.id();
+            List<ExpenseReport> rows = expenseApprovalsKeysetRepository.findPage(
+                    approverScope, cursorSubmittedAt, cursorId, boundedSize);
 
-        boolean hasMore = rows.size() > boundedSize;
-        List<ExpenseReport> pageRows = hasMore ? rows.subList(0, boundedSize) : rows;
+            boolean hasMore = rows.size() > boundedSize;
+            List<ExpenseReport> pageRows = hasMore ? rows.subList(0, boundedSize) : rows;
 
-        String nextCursor = null;
-        if (hasMore) {
-            ExpenseReport last = pageRows.get(pageRows.size() - 1);
-            nextCursor = new ApprovalsCursor(last.getSubmittedAt(), last.getId()).encode();
+            String nextCursor = null;
+            if (hasMore) {
+                ExpenseReport last = pageRows.get(pageRows.size() - 1);
+                nextCursor = new ApprovalsCursor(last.getSubmittedAt(), last.getId()).encode();
+            }
+
+            return new CursorPageResponse<>(pageRows.stream().map(ExpenseMapper::toResponse).toList(), nextCursor);
+        } finally {
+            sample.stop(meterRegistry.timer("approvals.requests"));
         }
-
-        return new CursorPageResponse<>(pageRows.stream().map(ExpenseMapper::toResponse).toList(), nextCursor);
     }
 
     private int boundedApprovalsSize(int requested) {
