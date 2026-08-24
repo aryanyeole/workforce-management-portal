@@ -1,0 +1,20 @@
+# Test-only profile, activated via @ActiveProfiles("test") on individual IT
+# classes — never loaded for the app itself (main/dev/prod all use only
+# src/main/resources/application.yml). Layers on top of that file rather than
+# replacing it, since Spring merges profile-specific config over the base file
+# instead of shadowing it.
+#
+# connection-init-sql pins every pooled connection's Postgres session to a
+# fixed, deliberately non-UTC, non-whole-hour-offset zone, applied at
+# connection creation time (before any query runs) regardless of the test
+# JVM's own default timezone. See ExpenseApprovalsKeysetIT: the Task C
+# timezone bug (an Instant literal silently reinterpreted using the session's
+# local timezone) went undetected by the original keyset tests only because
+# nothing pinned the test session to a *known* value — a session that
+# happened to be UTC would have masked the exact same defect. Asia/Kolkata is
+# picked specifically because it is not UTC and not a whole-hour offset,
+# so a reintroduced instance of that bug class fails loudly here.
+spring:
+  datasource:
+    hikari:
+      connection-init-sql: "SET TIME ZONE 'Asia/Kolkata'"
