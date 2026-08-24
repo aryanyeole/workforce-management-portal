@@ -347,3 +347,157 @@ page1000  n=100  min=0.0320 p50=0.0424 p95=0.0604 max=0.0693 mean=0.0436
 Both runs show the same pattern the EXPLAIN plans predict: page 1/100 (~28-32 ms p50) cluster together, page 500/1000 (~42-49 ms p50) cluster together, with the jump landing between page 100 and page 500 — matching where the plan flips from ordered `Index Scan` to `Bitmap Heap Scan` + `Sort`. Degradation with depth **did appear**, as expected, once the index existed — but as a step at the plan-flip boundary, not a smooth monotonic curve.
 
 State 2 (offset + partial index) is the confirmed second cell of the Task D 2×2 comparison.
+
+## Phase 6, Task C — State 3: composite index + keyset pagination
+
+**Date:** 2026-08-23
+**Migration:** none. State 2's `V7__expense_reports_pending_queue_index.sql` (`(submitted_at DESC) WHERE status = 'SUBMITTED' AND deleted_at IS NULL`) turned out to be sufficient once the query predicate itself was fixed — see below. No V8 was added.
+**Code:** `GET /api/v1/expenses/approvals` rewritten to keyset pagination — `ApprovalsCursor` (opaque base64 cursor over `(submittedAt, id)`), `CursorPageResponse`, `ExpenseApprovalsKeysetRepository` (hand-built `CriteriaQuery` via `EntityManager`, fetch-one-extra-row instead of a count query), `ExpenseSpecifications.beforeCursor`. `page`/`size` replaced by `cursor`/`size`; `size` bounded to 100.
+
+### The predicate bug this task actually turned on
+
+The obvious way to express the keyset boundary in JPA Criteria — since the API has no row-value constructor — is the boolean expansion of `(submitted_at, id) < (cursorAt, cursorId)`:
+
+```java
+cb.or(
+    cb.lessThan(root.get("submittedAt"), submittedAt),
+    cb.and(cb.equal(root.get("submittedAt"), submittedAt), cb.lessThan(root.get("id"), id)));
+```
+
+This is logically equivalent to the row comparison, and it's what a first pass at this task produces. `EXPLAIN` at the deep cursor (equivalent to offset 19,980 — same boundary row used throughout this task, `submitted_at = 2024-09-28 05:39:20.648735+00, id = 100861`, established the same way as Task B, via a one-time `OFFSET 19979 LIMIT 1` probe used only to locate the row, never as part of the measured design) shows why it's wrong in practice:
+
+```
+ Limit  (cost=12.20..262.54 rows=21 width=114) (actual time=10.949..10.959 rows=21 loops=1)
+   Buffers: shared hit=20043
+   ->  Incremental Sort  (cost=12.20..9763.63 rows=818 width=114) (actual time=10.948..10.955 rows=21 loops=1)
+         Sort Key: submitted_at DESC, id DESC
+         Presorted Key: submitted_at
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 27kB  Peak Memory: 27kB
+         Buffers: shared hit=20043
+         ->  Index Scan using idx_expense_reports_pending_queue on expense_reports er1_0  (cost=0.29..9726.85 rows=818 width=114) (actual time=10.883..10.899 rows=22 loops=1)
+               Filter: ((submitted_at < '2024-09-28 05:39:20.648735+00'::timestamp with time zone) OR ((submitted_at = '2024-09-28 05:39:20.648735+00'::timestamp with time zone) AND (id < 100861)))
+               Rows Removed by Filter: 19980
+               Buffers: shared hit=20037
+ Planning:
+   Buffers: shared hit=181
+ Planning Time: 1.225 ms
+ Execution Time: 11.034 ms
+```
+
+It never flips to a `Bitmap Heap Scan` the way offset pagination did (Task B) — but `Rows Removed by Filter: 19980` shows the scan starts at the beginning of the index and walks past (and discards) every row before the cursor, one at a time, exactly what keyset pagination exists to avoid. Postgres's planner does not recognize an `OR`-of-`AND`s as equivalent to a row-value comparison for the purpose of deriving an index range condition — only literal `ROW(a, b) < ROW(x, y)` syntax gets that treatment, and JPA's `CriteriaBuilder` has no way to emit that.
+
+**The fix:** Hibernate's `HibernateCriteriaBuilder.sql(pattern, type, args...)` — a typed escape hatch that splices a native SQL fragment into the compiled query, substituting the given Criteria expressions positionally — used to emit a literal `(a, b) < (x, y)` row comparison:
+
+```java
+return (root, query, cb) -> ((HibernateCriteriaBuilder) cb).isTrue(
+        ((HibernateCriteriaBuilder) cb).sql(
+                "(?, ?) < (?::timestamptz, ?)", Boolean.class,
+                root.get("submittedAt"), root.get("id"),
+                cb.literal(submittedAt.toString()), cb.literal(id)));
+```
+
+Two follow-on bugs surfaced while getting to that line, both worth recording since they'd silently corrupt results rather than fail loudly:
+
+1. **Placeholder syntax.** `sql()`'s placeholders are bare `?`, positional — not `?1`/`?2`. Using `"(?1, ?2) < (?3, ?4)"` didn't error at build time; it compiled to `(er1_0.submitted_at1, er1_0.id2) < (...)` — the digit was emitted as literal trailing text after each substituted expression — and failed at query time with a Postgres syntax error (`ERROR: syntax error at or near "3"`), not silently.
+2. **Timezone-dependent literal.** `cb.literal(submittedAt)` (an `Instant`) rendered as a bare `timestamp '...'` — no zone. Casting *that* to `timestamptz` doesn't recover UTC: it reinterprets the already-zoneless value using the session's local timezone. This one **did** fail silently: the query ran, returned 200, and returned plausible-looking rows — but the cursor's own boundary row came back in the "before" result set, meaning the deep-cursor test in `ExpenseApprovalsKeysetIT` would have started overlapping pages. It was only caught by manually checking that a cursor built from a known row's exact `(submittedAt, id)` excluded that row from the next page. Fixed by passing the ISO-8601 string (`submittedAt.toString()`, which ends in `Z`) and casting that string directly to `timestamptz` — parsed as UTC regardless of session timezone.
+
+### Confirming the fixed form compiles to what the index can serve
+
+Same deep cursor, corrected predicate, against the unmodified V7 index:
+
+```
+ Limit  (cost=3.73..76.62 rows=21 width=114) (actual time=0.160..0.165 rows=21 loops=1)
+   Buffers: shared hit=34
+   ->  Incremental Sort  (cost=3.73..2839.41 rows=817 width=114) (actual time=0.159..0.163 rows=21 loops=1)
+         Sort Key: submitted_at DESC, id DESC
+         Presorted Key: submitted_at
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 27kB  Peak Memory: 27kB
+         Buffers: shared hit=34
+         ->  Index Scan using idx_expense_reports_pending_queue on expense_reports er1_0  (cost=0.29..2802.68 rows=817 width=114) (actual time=0.029..0.096 rows=22 loops=1)
+               Index Cond: (submitted_at <= '2024-09-28 05:39:20.648735+00'::timestamp with time zone)
+               Filter: (ROW(submitted_at, id) < ROW('2024-09-28 05:39:20.648735+00'::timestamp with time zone, 100861))
+               Rows Removed by Filter: 1
+               Buffers: shared hit=25
+ Planning:
+   Buffers: shared hit=178
+ Planning Time: 1.012 ms
+ Execution Time: 0.248 ms
+```
+
+Shallow cursor (first page, no boundary condition at all):
+
+```
+ Limit  (cost=0.77..11.21 rows=21 width=114) (actual time=0.805..0.816 rows=21 loops=1)
+   Buffers: shared hit=33
+   ->  Incremental Sort  (cost=0.77..10487.39 rows=21093 width=114) (actual time=0.803..0.811 rows=21 loops=1)
+         Sort Key: submitted_at DESC, id DESC
+         Presorted Key: submitted_at
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 27kB  Peak Memory: 27kB
+         Buffers: shared hit=33
+         ->  Index Scan using idx_expense_reports_pending_queue on expense_reports er1_0  (cost=0.29..9568.65 rows=21093 width=114) (actual time=0.162..0.642 rows=22 loops=1)
+               Buffers: shared hit=24
+ Planning:
+   Buffers: shared hit=170
+ Planning Time: 1.655 ms
+ Execution Time: 0.907 ms
+```
+
+Both are a plain `Index Scan` — **no flip to `Bitmap Heap Scan` at depth**, the non-negotiable criterion for this task — and `Rows Removed by Filter` collapsed from 19,980 to 1. Execution time is sub-millisecond at both depths and does not grow with depth (0.248 ms deep vs. 0.907 ms shallow — the shallow number is *larger*, plain run-to-run noise at this scale, not a depth trend).
+
+### The index question, resolved (and one earlier finding of mine superseded)
+
+Both plans still carry a small `Incremental Sort` node: V7 only indexes `submitted_at`, so rows tied on it (never happens here — timestamps are microsecond-precision — but the planner can't assume that) aren't guaranteed already in `id DESC` order. Earlier in this task, before finding the predicate bug, I benchmarked a scratch `(submitted_at DESC, id DESC)` index **against the still-broken OR-expansion predicate** and measured a 34% improvement (13.337 ms → 8.805 ms) — and was ready to write a V8 migration on that basis. That comparison is superseded: it was measuring the index change while the predicate was still forcing a Filter-based scan-and-discard; the 34% was real but came from the composite index accidentally giving the *broken* query a shorter path, not from fixing the actual problem.
+
+Re-run with the **corrected** predicate, a scratch 2-column index changes nothing worth a migration:
+
+```
+ Limit  (cost=0.29..72.24 rows=21 width=114) (actual time=0.051..0.140 rows=21 loops=1)
+   Buffers: shared hit=21 read=2
+   ->  Index Scan using idx_scratch_test_with_id on expense_reports er1_0  (cost=0.29..2806.59 rows=819 width=114) (actual time=0.050..0.137 rows=21 loops=1)
+         Index Cond: (ROW(submitted_at, id) < ROW('2024-09-28 05:39:20.648735+00'::timestamp with time zone, 100861))
+         Buffers: shared hit=21 read=2
+ Planning:
+   Buffers: shared hit=194 read=1
+ Planning Time: 1.561 ms
+ Execution Time: 0.225 ms
+```
+
+The 2-column index does get a true `Index Cond` (the row comparison serves as the scan's range bound directly, no `Filter`, no `Incremental Sort` at all) — technically the cleaner plan. But the difference is 0.248 ms → 0.225 ms: 23 microseconds, noise at this scale, invisible in the HTTP measurements below. Per CLAUDE.md ("do not add composite/covering indexes without deliberate justification derived from the actual query, not a guess"), a 23 µs difference isn't justification. **Decision: no V8 migration.** The existing V7 index, with the corrected predicate, already satisfies the task's actual requirement (index scan, no bitmap flip, no depth-dependent cost); the scratch index was dropped and `ANALYZE`'d back to baseline after each test.
+
+### Correctness verification
+
+- `mvn verify`, full suite: **140/140 tests pass**, including the new `ExpenseApprovalsKeysetIT` (4/4: full traversal exactly-once with no dups/gaps against a known fixture total, last page's `nextCursor` is `null`, malformed cursor → 400 `ProblemDetail` (not a 500), cursor stays coherent when `size` changes between requests) and the full 104-case `RouteAuthorizationIT` matrix (VisibilityScope/authorization behavior unchanged).
+- Full traversal against the real dev dataset (not just the IT's small fixture): starting from `cursor=null`, walking `nextCursor` to exhaustion at `size=100` — **210 pages, 20,976 rows collected, 20,976 unique** — exactly matching the live `SELECT count(*) FROM expense_reports WHERE status='SUBMITTED' AND deleted_at IS NULL` count, zero duplicates, zero gaps.
+
+### Establishing offset-equivalent depths for a cursor API
+
+There is no "page 1000" to request with keyset pagination — a cursor only ever means "continue from here." The same four depths from Tasks A/B (offset 0 / 1,980 / 9,980 / 19,980, i.e. what page 1/100/500/1000 at size 20 would have covered) are reproduced by walking `nextCursor` forward from the start and consuming exactly that many rows, once, before any timed request — the walk itself is untimed setup, not part of what's measured, exactly mirroring how the offset harness reuses the same `page=N` parameter for every timed sample at that depth rather than re-deriving it per sample. `load/measure_approvals_keyset.sh` does this walk in chunks of 100 rows/request (the endpoint's max page size) purely to keep setup fast — a cursor is an opaque marker for an exact row, so the page size used to reach it doesn't affect where it points — landing on the exact same four boundary rows Task B used, then measuring the single next request at `size=20` (matching Task A/B) repeatedly, with the same discarded-warmup + randomized-order + p50/p95/n methodology.
+
+### HTTP end-to-end latency (same harness family as Tasks A/B: discarded warmup, randomized order, p50/p95, n=100/depth, two runs)
+
+**Run 1:**
+```
+page1     n=100  min=0.0162 p50=0.0210 p95=0.0261 max=0.0363 mean=0.0214
+page100   n=100  min=0.0156 p50=0.0211 p95=0.0269 max=0.0308 mean=0.0219
+page500   n=100  min=0.0163 p50=0.0211 p95=0.0268 max=0.0689 mean=0.0225
+page1000  n=100  min=0.0148 p50=0.0212 p95=0.0264 max=0.0294 mean=0.0218
+```
+
+**Run 2:**
+```
+page1     n=100  min=0.0143 p50=0.0242 p95=0.0509 max=0.0653 mean=0.0263
+page100   n=100  min=0.0154 p50=0.0262 p95=0.0596 max=0.1226 mean=0.0305
+page500   n=100  min=0.0147 p50=0.0247 p95=0.0540 max=0.0667 mean=0.0270
+page1000  n=100  min=0.0168 p50=0.0255 p95=0.0655 max=0.1032 mean=0.0310
+```
+
+p50 is flat across all four depths in both runs (~21 ms run 1, ~24-26 ms run 2 — the run-to-run difference is overall system noise, not a depth effect within either run). This is the signature keyset pagination is supposed to produce and offset pagination (Task B) did not: **no relationship between depth and cost.** Directly comparable to Task B's same-harness numbers — page1/page1000 p50 there were 0.0313/0.0469 ms (run 1) and 0.0280/0.0424 ms (run 2), a real depth-driven gap that lands almost exactly at keyset's flat ~0.021-0.026 ms band across every depth including the deepest.
+
+| | Task B (offset + index) p50 | Task C (keyset + index) p50 |
+|---|---|---|
+| page1 | 0.0313 / 0.0280 ms | 0.0210 / 0.0242 ms |
+| page100 | 0.0323 / 0.0302 ms | 0.0211 / 0.0262 ms |
+| page500 | 0.0491 / 0.0470 ms | 0.0211 / 0.0247 ms |
+| page1000 | 0.0469 / 0.0424 ms | 0.0212 / 0.0255 ms |
+
+State 3 (keyset + existing partial index) is the confirmed third cell of the Task D 2×2 comparison.

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.aryanyeole.wmp.common.api.CursorPageResponse;
 import com.aryanyeole.wmp.common.api.PageResponse;
 import com.aryanyeole.wmp.common.security.AuthPrincipal;
 import com.aryanyeole.wmp.expense.service.ExpenseService;
@@ -56,10 +57,10 @@ public class ExpenseController {
     }
 
     @GetMapping("/approvals")
-    public PageResponse<ExpenseResponse> approvals(@AuthenticationPrincipal AuthPrincipal principal,
-                                                     @RequestParam(defaultValue = "0") int page,
-                                                     @RequestParam(defaultValue = "20") int size) {
-        return expenseService.pendingApprovals(principal, page, size);
+    public CursorPageResponse<ExpenseResponse> approvals(@AuthenticationPrincipal AuthPrincipal principal,
+                                                          @RequestParam(required = false) String cursor,
+                                                          @RequestParam(defaultValue = "20") int size) {
+        return expenseService.pendingApprovals(principal, cursor, size);
     }
 
     @GetMapping("/{id}")

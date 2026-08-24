@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.aryanyeole.wmp.auth.repository.UserAccountRepository;
+import com.aryanyeole.wmp.common.api.CursorPageResponse;
 import com.aryanyeole.wmp.common.api.PageResponse;
 import com.aryanyeole.wmp.common.domain.ApprovalAction;
 import com.aryanyeole.wmp.common.domain.ApprovalEntityType;
@@ -30,6 +31,7 @@ import com.aryanyeole.wmp.expense.api.UpdateExpenseRequest;
 import com.aryanyeole.wmp.expense.domain.ExpenseCategory;
 import com.aryanyeole.wmp.expense.domain.ExpenseReport;
 import com.aryanyeole.wmp.expense.domain.ExpenseStatus;
+import com.aryanyeole.wmp.expense.repository.ExpenseApprovalsKeysetRepository;
 import com.aryanyeole.wmp.expense.repository.ExpenseCategoryRepository;
 import com.aryanyeole.wmp.expense.repository.ExpenseReportRepository;
 import com.aryanyeole.wmp.expense.repository.ExpenseSpecifications;
@@ -46,7 +48,12 @@ public class ExpenseService {
 
     private static final String NOT_FOUND_MESSAGE = "Expense report not found";
 
+    /** "sane maximum" for the approvals queue's keyset size — see pendingApprovals. */
+    private static final int APPROVALS_DEFAULT_SIZE = 20;
+    private static final int APPROVALS_MAX_SIZE = 100;
+
     private final ExpenseReportRepository expenseReportRepository;
+    private final ExpenseApprovalsKeysetRepository expenseApprovalsKeysetRepository;
     private final ExpenseCategoryRepository expenseCategoryRepository;
     private final EmployeeRepository employeeRepository;
     private final UserAccountRepository userAccountRepository;
@@ -54,12 +61,14 @@ public class ExpenseService {
     private final VisibilityScopeResolver visibilityScopeResolver;
 
     public ExpenseService(ExpenseReportRepository expenseReportRepository,
+                           ExpenseApprovalsKeysetRepository expenseApprovalsKeysetRepository,
                            ExpenseCategoryRepository expenseCategoryRepository,
                            EmployeeRepository employeeRepository,
                            UserAccountRepository userAccountRepository,
                            ApprovalEventRepository approvalEventRepository,
                            VisibilityScopeResolver visibilityScopeResolver) {
         this.expenseReportRepository = expenseReportRepository;
+        this.expenseApprovalsKeysetRepository = expenseApprovalsKeysetRepository;
         this.expenseCategoryRepository = expenseCategoryRepository;
         this.employeeRepository = employeeRepository;
         this.userAccountRepository = userAccountRepository;
@@ -181,16 +190,47 @@ public class ExpenseService {
         return ExpenseMapper.toResponse(report);
     }
 
+    /**
+     * Keyset pagination: (submitted_at DESC, id DESC), an opaque cursor
+     * over the last row's own (submitted_at, id) rather than an offset.
+     * cursor is the raw client-supplied string (null for the first page);
+     * a malformed one is rejected by ApprovalsCursor.decode before it
+     * ever reaches the query. VisibilityScope scoping is unchanged from
+     * the offset implementation — only how the page boundary is
+     * expressed has changed.
+     */
     @Transactional(readOnly = true)
-    public PageResponse<ExpenseResponse> pendingApprovals(AuthPrincipal principal, int page, int size) {
+    public CursorPageResponse<ExpenseResponse> pendingApprovals(AuthPrincipal principal, String cursor, int size) {
+        int boundedSize = boundedApprovalsSize(size);
+        ApprovalsCursor decodedCursor = cursor == null ? null : ApprovalsCursor.decode(cursor);
+
         Specification<ExpenseReport> approverScope = ExpenseSpecifications.visibleTo(
                 visibilityScopeResolver.resolve(principal));
 
-        Page<ExpenseResponse> results = expenseReportRepository
-                .findPendingApprovals(approverScope, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "submittedAt")))
-                .map(ExpenseMapper::toResponse);
+        // Fetch one extra row to learn whether more remain, instead of a
+        // second COUNT query — the whole point of not using offset/Page here.
+        Instant cursorSubmittedAt = decodedCursor == null ? null : decodedCursor.submittedAt();
+        Long cursorId = decodedCursor == null ? null : decodedCursor.id();
+        List<ExpenseReport> rows = expenseApprovalsKeysetRepository.findPage(
+                approverScope, cursorSubmittedAt, cursorId, boundedSize);
 
-        return PageResponse.from(results);
+        boolean hasMore = rows.size() > boundedSize;
+        List<ExpenseReport> pageRows = hasMore ? rows.subList(0, boundedSize) : rows;
+
+        String nextCursor = null;
+        if (hasMore) {
+            ExpenseReport last = pageRows.get(pageRows.size() - 1);
+            nextCursor = new ApprovalsCursor(last.getSubmittedAt(), last.getId()).encode();
+        }
+
+        return new CursorPageResponse<>(pageRows.stream().map(ExpenseMapper::toResponse).toList(), nextCursor);
+    }
+
+    private int boundedApprovalsSize(int requested) {
+        if (requested <= 0) {
+            return APPROVALS_DEFAULT_SIZE;
+        }
+        return Math.min(requested, APPROVALS_MAX_SIZE);
     }
 
     private void recordEvent(ExpenseReport report, AuthPrincipal principal, ApprovalAction action, String comment) {
