@@ -1,0 +1,17 @@
+# Test-only profile for PayrollAccrualJobLeakIT (Phase 8 Task 4), activated
+# via @ActiveProfiles("leak-test"). Layers on top of application.yml, same
+# as application-test.yml — kept as its own separate profile rather than
+# reusing "test" so this deliberately tiny pool can't affect
+# ExpenseApprovalsKeysetIT's own isolated context, which has no reason to
+# run against a 3-connection pool.
+#
+# A small maximum-pool-size is what lets the regression test exhaust the
+# pool deterministically with a small, fast fixture (15 employees) instead
+# of needing hundreds of rows to reliably drain a pool sized 10 — see the
+# test class itself for why this, rather than a sleep-and-hope wait, is
+# what makes the assertion deterministic.
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 3
+      connection-timeout: 2000

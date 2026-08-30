@@ -5,6 +5,23 @@ spring:
     url: jdbc:postgresql://localhost:5433/wmp
     username: ${DB_USER:wmp}
     password: ${DB_PASSWORD:wmp_local_dev}
+    hikari:
+      # Phase 8 (docs/incidents/2026-08-payroll-500s.md): these were unset
+      # (Hikari's own defaults) when the accrual-job leak was reproduced and
+      # diagnosed. None of them would have prevented that incident — a
+      # leaked connection is gone from the pool regardless of how big the
+      # pool is or how long a caller waits for one — they bound its blast
+      # radius and shorten time-to-detection instead. See the incident
+      # doc's Fix section for the full reasoning behind each value.
+      maximum-pool-size: 10
+      connection-timeout: 5000
+      leak-detection-threshold: 2000
+      # Applied per pooled connection at creation time, not via container
+      # config — see the incident doc's Fix section for why (container
+      # config wouldn't reach the Testcontainers-spawned Postgres the ITs
+      # run against, nor any other Postgres instance this app might one
+      # day point at).
+      connection-init-sql: "SET statement_timeout = 5000; SET idle_in_transaction_session_timeout = 60000;"
   jpa:
     hibernate:
       ddl-auto: validate
@@ -61,5 +78,6 @@ wmp:
     accrual:
       # Default: 2 AM daily — never fires mid-run in a short-lived test
       # JVM. Also trigger-able on demand via POST
-      # /api/v1/payroll/accrual/run (see PayrollAccrualJob, Phase 8).
+      # /actuator/payroll-accrual (see PayrollAccrualJob/PayrollAccrualEndpoint,
+      # Phase 8).
       cron: ${WMP_PAYROLL_ACCRUAL_CRON:0 0 2 * * *}

@@ -17,7 +17,23 @@
 | 21:19:22.080 | Last `500` / last row of submit traffic (load generator's 240s window ends) |
 | 21:22:06.711 | Isolated post-completion check, ~2m45s after the load generator finished and ~5m49s after the trigger was sent: still `500`, `time=30.026321s` — **no self-recovery** |
 
-### Note on the first-500 timestamp
+### Note on the first-500 timestamp — **SUPERSEDED, see docs/incidents/2026-08-payroll-500s.md §6**
+
+> **This flag was an arithmetic error in this file, not a real anomaly.** The
+> reasoning below computed `ts − elapsed` to get a start time, but `ts` is
+> logged *before* the request is issued — the request's own start time is
+> `ts` itself, and it *completes* at `ts + elapsed`, not `ts − elapsed`.
+> Recomputed correctly: `ts=21:16:20.041 + elapsed=30.083122s` = completes at
+> **21:16:50.124**, which lands within 124ms of the application log's own
+> first occurrence (`21:16:50.248`, cited below) — the two independent
+> sources agree, and the request started a plausible **2.265 seconds after**
+> the accrual trigger was sent (`21:16:17.776`), not ~28 seconds before it.
+> There is no measurement artifact and nothing here needed the "likely a
+> bash/curl process-spawn lag" explanation offered below — that explanation
+> is superseded along with the number it was invented to excuse. See the
+> diagnosis's §6 ("Reconciling the numbers") for the full corrected
+> derivation and what the corrected timing implies about how fast the leak
+> exhausts the pool.
 
 The worker script logs a timestamp immediately before issuing each `curl` call, then records `%{time_total}`. Arithmetically, the first `500` row (`ts=21:16:20.041`, `elapsed=30.083s`) implies that request *started* around `21:15:49.958` — nearly 28 seconds *before* the accrual trigger was even sent. This is likely a measurement artifact of the load generator's design (8 independent bash loops each forking a fresh `date`+`curl` process per iteration; under sustained concurrent process-spawn load, an individual iteration's logged start time can lag its actual request start by a non-trivial amount). Flagging this rather than silently trusting the arithmetic — it does not affect the aggregate/log-based timeline above, which is corroborated independently by the application log's own timestamps (first HikariPool timeout logged in-app at `14:16:50.248-07:00` local = `21:16:50.248Z`, i.e. ~32.5s after the trigger, consistent with one full `connection-timeout` cycle after the pool was driven to exhaustion).
 

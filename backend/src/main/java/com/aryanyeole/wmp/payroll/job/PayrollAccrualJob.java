@@ -37,22 +37,20 @@ import com.aryanyeole.wmp.payroll.repository.PayrollItemRepository;
  * exists" is awkward to express in JPA/HQL but is one PreparedStatement
  * with Postgres's {@code INSERT ... ON CONFLICT DO UPDATE}.
  *
- * // INTENTIONAL LEAK — see docs/incidents/payroll-submit-500s.md (Phase 8).
- * Every {@value #LEAK_EVERY_NTH}th employee's connection is obtained via
- * {@link #upsertLeaky} instead of {@link #upsertClean}: no
- * try-with-resources, no finally block — the Connection (and the
- * PreparedStatement opened on it) is simply never closed, so it is never
- * returned to the Hikari pool. This is left in deliberately, for Phase
- * 8's reproduction of pool exhaustion; do not "fix" it outside that
- * phase's own Task 4.
+ * Phase 8 (see docs/incidents/2026-08-payroll-500s.md) deliberately shipped
+ * this upsert with every 5th employee's connection never closed, to
+ * reproduce and diagnose pool exhaustion under real traffic. That defect
+ * is fixed here (Task 4): {@link #upsert} acquires its connection with
+ * try-with-resources, so every employee's connection is returned to the
+ * pool regardless of outcome. The regression test (PayrollAccrualJobLeakIT)
+ * asserts on Hikari's own pool state after a run completes, not on this
+ * class's source text, and was verified to fail against the leaky version
+ * before this fix landed.
  */
 @Component
 public class PayrollAccrualJob {
 
     private static final Logger log = LoggerFactory.getLogger(PayrollAccrualJob.class);
-
-    /** Deliberately not every iteration — see the class javadoc's INTENTIONAL LEAK note. */
-    private static final int LEAK_EVERY_NTH = 5;
 
     private static final String UPSERT_SQL = """
             INSERT INTO payroll_accruals (employee_id, period_start, period_end, accrued_amount, computed_at)
@@ -77,7 +75,7 @@ public class PayrollAccrualJob {
      * Cron-triggered entry point. Configurable (default: 2 AM daily —
      * chosen so it never fires mid-run in a short-lived test JVM without
      * needing to disable scheduling for tests). See {@link #run()} for the
-     * on-demand entry point used by Phase 8's reproduction.
+     * on-demand entry point.
      */
     @Scheduled(cron = "${wmp.payroll.accrual.cron:0 0 2 * * *}")
     public void runScheduled() {
@@ -85,9 +83,9 @@ public class PayrollAccrualJob {
     }
 
     /**
-     * On-demand entry point — exposed via POST /api/v1/payroll/accrual/run
-     * (PayrollAccrualController) so Phase 8's reproduction doesn't have to
-     * wait for a cron window.
+     * On-demand entry point — exposed via POST /actuator/payroll-accrual
+     * (PayrollAccrualEndpoint) so an operator (or a test) can run it without
+     * waiting for a cron window.
      */
     public AccrualRunResult run() {
         LocalDate today = LocalDate.now();
@@ -102,13 +100,8 @@ public class PayrollAccrualJob {
         int processed = 0;
         for (Employee employee : activeEmployees) {
             BigDecimal accrued = estimateAccrued(employee.getId(), daysElapsed, daysInPeriod);
-
+            upsert(employee.getId(), periodStart, periodEnd, accrued);
             processed++;
-            if (processed % LEAK_EVERY_NTH == 0) {
-                upsertLeaky(employee.getId(), periodStart, periodEnd, accrued);
-            } else {
-                upsertClean(employee.getId(), periodStart, periodEnd, accrued);
-            }
         }
 
         log.info("Payroll accrual run complete: period={}..{}, employeesProcessed={}",
@@ -129,29 +122,11 @@ public class PayrollAccrualJob {
         return dailyRate.multiply(BigDecimal.valueOf(daysElapsed));
     }
 
-    private void upsertClean(Long employeeId, LocalDate periodStart, LocalDate periodEnd, BigDecimal accrued) {
+    private void upsert(Long employeeId, LocalDate periodStart, LocalDate periodEnd, BigDecimal accrued) {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(UPSERT_SQL)) {
             bind(statement, employeeId, periodStart, periodEnd, accrued);
             statement.executeUpdate();
-        } catch (SQLException e) {
-            throw new PayrollAccrualUpsertException(employeeId, e);
-        }
-    }
-
-    // INTENTIONAL LEAK — see docs/incidents/payroll-submit-500s.md (Phase 8).
-    // No try-with-resources and no finally: the Connection returned by
-    // getConnection() is never closed on this path, so it never goes back
-    // to the Hikari pool. Kept exactly this way for Phase 8's
-    // reproduction — do not add resource management here outside that
-    // phase's Task 4.
-    private void upsertLeaky(Long employeeId, LocalDate periodStart, LocalDate periodEnd, BigDecimal accrued) {
-        try {
-            Connection connection = dataSource.getConnection();
-            PreparedStatement statement = connection.prepareStatement(UPSERT_SQL);
-            bind(statement, employeeId, periodStart, periodEnd, accrued);
-            statement.executeUpdate();
-            // connection and statement deliberately never closed here.
         } catch (SQLException e) {
             throw new PayrollAccrualUpsertException(employeeId, e);
         }
@@ -166,7 +141,7 @@ public class PayrollAccrualJob {
         statement.setTimestamp(5, Timestamp.from(Instant.now()));
     }
 
-    /** Thrown by both the clean and leaky upsert paths on a genuine SQL failure — not part of the leak itself. */
+    /** Thrown by the upsert path on a genuine SQL failure. */
     static final class PayrollAccrualUpsertException extends RuntimeException {
         PayrollAccrualUpsertException(Long employeeId, SQLException cause) {
             super("Payroll accrual upsert failed for employee " + employeeId, cause);

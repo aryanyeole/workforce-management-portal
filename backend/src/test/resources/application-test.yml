@@ -14,7 +14,15 @@
 # happened to be UTC would have masked the exact same defect. Asia/Kolkata is
 # picked specifically because it is not UTC and not a whole-hour offset,
 # so a reintroduced instance of that bug class fails loudly here.
+#
+# connection-init-sql is a single scalar property: a profile-specific value
+# here fully replaces (not merges with) the base application.yml's own
+# connection-init-sql (the Phase 8 statement/idle-in-transaction timeouts),
+# so both are folded into one SQL string below — otherwise this profile's
+# one IT class would silently lose the Phase 8 timeouts the rest of the
+# suite gets. Postgres's simple query protocol runs semicolon-separated
+# statements in one call, so this executes all three SETs per connection.
 spring:
   datasource:
     hikari:
-      connection-init-sql: "SET TIME ZONE 'Asia/Kolkata'"
+      connection-init-sql: "SET TIME ZONE 'Asia/Kolkata'; SET statement_timeout = 5000; SET idle_in_transaction_session_timeout = 60000;"
