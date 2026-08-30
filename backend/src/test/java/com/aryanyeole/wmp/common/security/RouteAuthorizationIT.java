@@ -306,6 +306,15 @@ class RouteAuthorizationIT extends AbstractIntegrationTest {
                 new RouteCase(RoleCode.PAYROLL_ADMIN, HttpMethod.POST, "/api/v1/payroll/runs/1/reject", false),
                 new RouteCase(RoleCode.EMPLOYEE, HttpMethod.POST, "/api/v1/payroll/runs/1/reject", true),
 
+                // Deliberately only the forbidden case here — see PayrollAccrualJob's
+                // INTENTIONAL LEAK. Unlike every other route in this matrix, the
+                // "false" (allowed) case genuinely executes the handler
+                // (enforcesPermissionRegistry only asserts status != 403), and this
+                // one's handler runs the Phase 8 batch job for real against the
+                // shared test datasource/pool. Exercising the success path belongs
+                // to Phase 8's own isolated reproduction, not the standard suite.
+                new RouteCase(RoleCode.MANAGER, HttpMethod.POST, "/api/v1/payroll/accrual/run", true),
+
                 // Payslips ARE employee-owned: ALL_STAFF, SYSTEM excluded
                 new RouteCase(RoleCode.EMPLOYEE, HttpMethod.GET, "/api/v1/payroll/employees/1/payslips", false),
                 new RouteCase(RoleCode.MANAGER, HttpMethod.GET, "/api/v1/payroll/employees/1/payslips", false),

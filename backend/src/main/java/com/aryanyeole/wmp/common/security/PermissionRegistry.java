@@ -148,6 +148,12 @@ public class PermissionRegistry {
                 new RoutePermission(HttpMethod.POST, "/api/v1/payroll/runs/{id}/reject",
                         Set.of(RoleCode.PAYROLL_ADMIN), false),
 
+                // On-demand trigger for the nightly accrual batch job (Phase 8) — an
+                // ops action, not employee-owned data, so PAYROLL_ADMIN + unscoped
+                // matches the rest of this section.
+                new RoutePermission(HttpMethod.POST, "/api/v1/payroll/accrual/run",
+                        Set.of(RoleCode.PAYROLL_ADMIN), false),
+
                 // Payslips ARE employee-owned — ALL_STAFF (SYSTEM excluded), row-scoped.
                 new RoutePermission(HttpMethod.GET, "/api/v1/payroll/employees/{employeeId}/payslips",
                         ALL_STAFF, true),

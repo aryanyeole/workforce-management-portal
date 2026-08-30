@@ -57,3 +57,9 @@ wmp:
       base-path: ${WMP_DOCUMENT_STORAGE_PATH:./data/onboarding-documents}
       max-file-size: 10MB
       allowed-content-types: application/pdf,image/png,image/jpeg
+  payroll:
+    accrual:
+      # Default: 2 AM daily — never fires mid-run in a short-lived test
+      # JVM. Also trigger-able on demand via POST
+      # /api/v1/payroll/accrual/run (see PayrollAccrualJob, Phase 8).
+      cron: ${WMP_PAYROLL_ACCRUAL_CRON:0 0 2 * * *}

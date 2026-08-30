@@ -68,15 +68,16 @@ class OpenApiIT extends AbstractIntegrationTest {
     }
 
     /**
-     * The standing proof of the resume claim ("30 endpoints"): counts
-     * method+path combinations under the three domain prefixes only,
-     * excluding /auth/** (outside the 30 per ROADMAP) and /actuator/**.
-     * Fails loudly the moment the count drifts in either direction —
-     * an endpoint added without updating this count, or one removed
-     * without noticing, both break the build.
+     * The standing proof of the resume claim ("30 endpoints", now 31 as of
+     * Phase 8's payroll accrual trigger): counts method+path combinations
+     * under the three domain prefixes only, excluding /auth/** (outside
+     * the original 30 per ROADMAP) and /actuator/**. Fails loudly the
+     * moment the count drifts in either direction — an endpoint added
+     * without updating this count, or one removed without noticing, both
+     * break the build.
      */
     @Test
-    void apiDocsExposesExactlyThirtyDomainEndpoints() throws Exception {
+    void apiDocsExposesExactlyThirtyOneDomainEndpoints() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -100,6 +101,6 @@ class OpenApiIT extends AbstractIntegrationTest {
             }
         }
 
-        assertThat(endpointCount).isEqualTo(30);
+        assertThat(endpointCount).isEqualTo(31);
     }
 }
