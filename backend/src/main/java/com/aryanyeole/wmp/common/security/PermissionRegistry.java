@@ -77,6 +77,15 @@ public class PermissionRegistry {
             "/actuator/metrics",
             "/actuator/metrics/**",
             "/actuator/prometheus",
+            // Write-capable, unlike the read-only ones above — deliberately
+            // NOT gated by a role check here. Its actual access control is
+            // Spring Boot's own endpoint exposure (management.endpoints.web
+            // .exposure.include), which only lists it under the "dev"
+            // profile (see application-dev.yml) — see PayrollAccrualEndpoint's
+            // javadoc for why that's this project's stand-in for the
+            // separate management port/network policy a real deployment
+            // would use instead.
+            "/actuator/payroll-accrual",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html");
@@ -146,12 +155,6 @@ public class PermissionRegistry {
                 new RoutePermission(HttpMethod.POST, "/api/v1/payroll/runs/{id}/approve",
                         Set.of(RoleCode.PAYROLL_ADMIN), false),
                 new RoutePermission(HttpMethod.POST, "/api/v1/payroll/runs/{id}/reject",
-                        Set.of(RoleCode.PAYROLL_ADMIN), false),
-
-                // On-demand trigger for the nightly accrual batch job (Phase 8) — an
-                // ops action, not employee-owned data, so PAYROLL_ADMIN + unscoped
-                // matches the rest of this section.
-                new RoutePermission(HttpMethod.POST, "/api/v1/payroll/accrual/run",
                         Set.of(RoleCode.PAYROLL_ADMIN), false),
 
                 // Payslips ARE employee-owned — ALL_STAFF (SYSTEM excluded), row-scoped.

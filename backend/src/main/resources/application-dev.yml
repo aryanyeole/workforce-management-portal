@@ -1,0 +1,17 @@
+# Phase 8: dev-only overrides, activated via spring.profiles.active=dev
+# (same profile DevDataSeeder already gates on). Layers on top of
+# application.yml rather than replacing it.
+#
+# Adds "payroll-accrual" to the exposed actuator endpoints —
+# PayrollAccrualEndpoint (POST /actuator/payroll-accrual) triggers a real
+# write (and, currently, PayrollAccrualJob's intentional Phase 8 leak), so
+# unlike the read-only endpoints in application.yml's base list, it is
+# deliberately NOT exposed by default. A real deployment would put an
+# operational trigger like this behind a separate management port and
+# network policy instead of relying on profile-gated exposure; this
+# project has neither, so this is its stand-in.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,payroll-accrual

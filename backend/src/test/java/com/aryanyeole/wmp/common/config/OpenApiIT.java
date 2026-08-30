@@ -68,16 +68,23 @@ class OpenApiIT extends AbstractIntegrationTest {
     }
 
     /**
-     * The standing proof of the resume claim ("30 endpoints", now 31 as of
-     * Phase 8's payroll accrual trigger): counts method+path combinations
-     * under the three domain prefixes only, excluding /auth/** (outside
-     * the original 30 per ROADMAP) and /actuator/**. Fails loudly the
-     * moment the count drifts in either direction — an endpoint added
-     * without updating this count, or one removed without noticing, both
-     * break the build.
+     * The standing proof of the resume claim ("30 endpoints"): counts
+     * method+path combinations under the three domain prefixes only,
+     * excluding /auth/** (outside the 30 per ROADMAP) and /actuator/**.
+     * Fails loudly the moment the count drifts in either direction —
+     * an endpoint added without updating this count, or one removed
+     * without noticing, both break the build.
+     *
+     * PayrollAccrualJob's on-demand trigger (Phase 8) briefly lived at
+     * POST /api/v1/payroll/accrual/run and bumped this to 31 — it was
+     * relocated to a custom actuator endpoint (PayrollAccrualEndpoint,
+     * /actuator/payroll-accrual) specifically because it's operational
+     * tooling, not domain API, restoring this count to 30 with no new
+     * exclusion needed: actuator endpoints were already outside these
+     * domain prefixes.
      */
     @Test
-    void apiDocsExposesExactlyThirtyOneDomainEndpoints() throws Exception {
+    void apiDocsExposesExactlyThirtyDomainEndpoints() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -101,6 +108,6 @@ class OpenApiIT extends AbstractIntegrationTest {
             }
         }
 
-        assertThat(endpointCount).isEqualTo(31);
+        assertThat(endpointCount).isEqualTo(30);
     }
 }
