@@ -30,12 +30,23 @@ See `src/api/client.ts` for where this is read.
 
 ## CORS
 
-As of Phase 9 Task 1, the backend does not yet accept cross-origin requests
-from this app's dev server — see that task's report for the preflight
-evidence and the proposed fix (a single, dev-profile-gated CORS
-configuration bean on the backend, not yet implemented pending approval).
-Until that lands, requests from `npm run dev` will fail in a real browser
-even though the backend itself is reachable.
+Resolved in Phase 9 Task 1b: the backend has a single, dev-profile-gated
+CORS configuration bean (`backend/.../common/config/CorsConfig.java`),
+origin read from `wmp.cors.allowed-origin` (defaults to
+`http://localhost:5173`, this app's own dev port). It only exists when the
+backend runs with `--spring-boot.run.profiles=dev` — see that task's report
+for the verification that it's genuinely absent otherwise, and for how the
+preflight is actually handled (Spring Security's `CorsFilter` short-circuits
+the request before it reaches this app's own auth filters — see
+`docs/incidents/` if that report gets archived there later).
+
+## Linting
+
+**Not configured.** `create-vite`'s template included `oxlint`, which was
+deliberately dropped in Phase 9 Task 1 as out of scope (not on CLAUDE.md's
+pre-approved dependency list, and linting wasn't part of that task).
+Phase 10's CI work should treat this as "needs to be added," not assume a
+lint step already exists — there is no `npm run lint` script.
 
 ## Other commands
 

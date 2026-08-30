@@ -2,6 +2,7 @@ package com.aryanyeole.wmp.common.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -28,6 +29,10 @@ public class SecurityConfig {
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
+                // Picks up whatever CorsConfigurationSource bean is in context
+                // (only CorsConfig's, dev-profile-only) — a no-op everywhere
+                // else, since there's nothing to configure with. See CorsConfig.
+                .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Spring's own matcher DSL is intentionally left permissive:
                 // RouteAuthorizationFilter is the single enforcement point, and
