@@ -1,0 +1,192 @@
+# HikariPool timeout log excerpt (Phase 8 Task 2 evidence)
+# 119 total occurrences in the full run; this file keeps the first 2 full
+# occurrences (with stack trace) for verbatim reference, then every raw
+# HikariPool-1 log line (one per occurrence) for the full progression of
+# total/active/idle/waiting across the whole run.
+
+## First 2 occurrences, full context
+```
+2026-08-30T14:16:50.248-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HHH000247: ErrorCode: 0, SQLState: null
+2026-08-30T14:16:50.248-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=8)
+2026-08-30T14:16:50.272-07:00  WARN 14628 --- [wmp] [nio-8080-exec-1] org.hibernate.orm.jdbc.error             : HHH000247: ErrorCode: 0, SQLState: null
+2026-08-30T14:16:50.272-07:00  WARN 14628 --- [wmp] [nio-8080-exec-1] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30008ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:16:50.272-07:00  WARN 14628 --- [wmp] [nio-8080-exec-9] org.hibernate.orm.jdbc.error             : HHH000247: ErrorCode: 0, SQLState: null
+2026-08-30T14:16:50.272-07:00  WARN 14628 --- [wmp] [nio-8080-exec-9] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30009ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:16:50.288-07:00  WARN 14628 --- [wmp] [nio-8080-exec-7] org.hibernate.orm.jdbc.error             : HHH000247: ErrorCode: 0, SQLState: null
+2026-08-30T14:16:50.288-07:00  WARN 14628 --- [wmp] [nio-8080-exec-8] org.hibernate.orm.jdbc.error             : HHH000247: ErrorCode: 0, SQLState: null
+2026-08-30T14:16:50.288-07:00  WARN 14628 --- [wmp] [nio-8080-exec-7] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:16:50.288-07:00  WARN 14628 --- [wmp] [nio-8080-exec-8] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:16:50.282-07:00 ERROR 14628 --- [wmp] [nio-8080-exec-9] o.a.c.c.C.[.[.[/].[dispatcherServlet]    : Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed: org.springframework.transaction.CannotCreateTransactionException: Could not open JPA EntityManager for transaction] with root cause
+
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30009ms (total=10, active=10, idle=0, waiting=6)
+	at com.zaxxer.hikari.pool.HikariPool.createTimeoutException(HikariPool.java:714) ~[HikariCP-7.0.2.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.getConnection(HikariPool.java:184) ~[HikariCP-7.0.2.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.getConnection(HikariPool.java:142) ~[HikariCP-7.0.2.jar:na]
+	at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:127) ~[HikariCP-7.0.2.jar:na]
+	at org.hibernate.engine.jdbc.connections.internal.DataSourceConnectionProvider.getConnection(DataSourceConnectionProvider.java:149) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.internal.NonContextualJdbcConnectionAccess.obtainConnection(NonContextualJdbcConnectionAccess.java:62) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.acquire(LogicalConnectionManagedImpl.java:187) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.acquireConnectionIfNeeded(LogicalConnectionManagedImpl.java:87) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.getPhysicalConnection(LogicalConnectionManagedImpl.java:126) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.getConnectionForTransactionManagement(LogicalConnectionManagedImpl.java:281) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.begin(LogicalConnectionManagedImpl.java:290) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorImpl$TransactionDriverControlImpl.begin(JdbcResourceLocalTransactionCoordinatorImpl.java:226) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.engine.transaction.internal.TransactionImpl.begin(TransactionImpl.java:75) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.beginTransaction(HibernateJpaDialect.java:147) ~[spring-orm-7.0.9.jar:7.0.9]
+	at org.springframework.orm.jpa.JpaTransactionManager.doBegin(JpaTransactionManager.java:411) ~[spring-orm-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.support.AbstractPlatformTransactionManager.startTransaction(AbstractPlatformTransactionManager.java:532) ~[spring-tx-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.support.AbstractPlatformTransactionManager.getTransaction(AbstractPlatformTransactionManager.java:405) ~[spring-tx-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.createTransactionIfNecessary(TransactionAspectSupport.java:628) ~[spring-tx-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:365) ~[spring-tx-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:130) ~[spring-tx-7.0.9.jar:7.0.9]
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179) ~[spring-aop-7.0.9.jar:7.0.9]
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:719) ~[spring-aop-7.0.9.jar:7.0.9]
+	at com.aryanyeole.wmp.payroll.service.PayrollService$$SpringCGLIB$$0.submit(<generated>) ~[classes/:na]
+	at com.aryanyeole.wmp.payroll.api.PayrollRunController.submit(PayrollRunController.java:69) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+--
+
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=4)
+	at com.zaxxer.hikari.pool.HikariPool.createTimeoutException(HikariPool.java:714) ~[HikariCP-7.0.2.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.getConnection(HikariPool.java:184) ~[HikariCP-7.0.2.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.getConnection(HikariPool.java:142) ~[HikariCP-7.0.2.jar:na]
+	at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:127) ~[HikariCP-7.0.2.jar:na]
+	at org.hibernate.engine.jdbc.connections.internal.DataSourceConnectionProvider.getConnection(DataSourceConnectionProvider.java:149) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.internal.NonContextualJdbcConnectionAccess.obtainConnection(NonContextualJdbcConnectionAccess.java:62) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.acquire(LogicalConnectionManagedImpl.java:187) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.acquireConnectionIfNeeded(LogicalConnectionManagedImpl.java:87) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.getPhysicalConnection(LogicalConnectionManagedImpl.java:126) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.getConnectionForTransactionManagement(LogicalConnectionManagedImpl.java:281) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.jdbc.internal.LogicalConnectionManagedImpl.begin(LogicalConnectionManagedImpl.java:290) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorImpl$TransactionDriverControlImpl.begin(JdbcResourceLocalTransactionCoordinatorImpl.java:226) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.hibernate.engine.transaction.internal.TransactionImpl.begin(TransactionImpl.java:75) ~[hibernate-core-7.4.5.Final.jar:7.4.5.Final]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.beginTransaction(HibernateJpaDialect.java:147) ~[spring-orm-7.0.9.jar:7.0.9]
+	at org.springframework.orm.jpa.JpaTransactionManager.doBegin(JpaTransactionManager.java:411) ~[spring-orm-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.support.AbstractPlatformTransactionManager.startTransaction(AbstractPlatformTransactionManager.java:532) ~[spring-tx-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.support.AbstractPlatformTransactionManager.getTransaction(AbstractPlatformTransactionManager.java:405) ~[spring-tx-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.createTransactionIfNecessary(TransactionAspectSupport.java:628) ~[spring-tx-7.0.9.jar:7.0.9]
+	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:365) ~[spring-tx-7.0.9.jar:7.0.9]
+```
+
+## Every HikariPool-1 log line from the run (119 total)
+```
+2026-08-30T14:16:50.248-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=8)
+2026-08-30T14:16:50.272-07:00  WARN 14628 --- [wmp] [nio-8080-exec-1] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30008ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:16:50.272-07:00  WARN 14628 --- [wmp] [nio-8080-exec-9] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30009ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:16:50.288-07:00  WARN 14628 --- [wmp] [nio-8080-exec-7] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:16:50.288-07:00  WARN 14628 --- [wmp] [nio-8080-exec-8] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=4)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30009ms (total=10, active=10, idle=0, waiting=6)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=4)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30008ms (total=10, active=10, idle=0, waiting=6)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:16:50.282-07:00 ERROR 14628 --- [wmp] [nio-8080-exec-2] o.a.c.c.C.[.[.[/].[dispatcherServlet]    : Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed: org.springframework.dao.DataAccessResourceFailureException: Unable to acquire JDBC Connection [HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=8)] [n/a]] with root cause
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=8)
+2026-08-30T14:16:50.304-07:00  WARN 14628 --- [wmp] [io-8080-exec-10] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30013ms (total=10, active=10, idle=0, waiting=3)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30013ms (total=10, active=10, idle=0, waiting=3)
+2026-08-30T14:16:50.384-07:00  WARN 14628 --- [wmp] [nio-8080-exec-5] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30000ms (total=10, active=10, idle=0, waiting=2)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms (total=10, active=10, idle=0, waiting=2)
+2026-08-30T14:16:50.418-07:00  WARN 14628 --- [wmp] [nio-8080-exec-3] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=1)
+2026-08-30T14:16:50.497-07:00  WARN 14628 --- [wmp] [nio-8080-exec-4] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=0)
+2026-08-30T14:17:20.593-07:00  WARN 14628 --- [wmp] [io-8080-exec-11] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=7)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=7)
+2026-08-30T14:17:20.609-07:00  WARN 14628 --- [wmp] [nio-8080-exec-8] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30003ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:17:20.609-07:00  WARN 14628 --- [wmp] [nio-8080-exec-6] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30004ms (total=10, active=10, idle=0, waiting=5)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30004ms (total=10, active=10, idle=0, waiting=5)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30003ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:17:20.627-07:00  WARN 14628 --- [wmp] [nio-8080-exec-1] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30016ms (total=10, active=10, idle=0, waiting=3)
+2026-08-30T14:17:20.628-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30006ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:17:20.628-07:00  WARN 14628 --- [wmp] [nio-8080-exec-9] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30016ms (total=10, active=10, idle=0, waiting=2)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30016ms (total=10, active=10, idle=0, waiting=2)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30016ms (total=10, active=10, idle=0, waiting=3)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30006ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:17:20.659-07:00  WARN 14628 --- [wmp] [nio-8080-exec-7] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30001ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30001ms (total=10, active=10, idle=0, waiting=1)
+2026-08-30T14:17:20.737-07:00  WARN 14628 --- [wmp] [io-8080-exec-10] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30008ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30008ms (total=10, active=10, idle=0, waiting=0)
+2026-08-30T14:17:50.951-07:00  WARN 14628 --- [wmp] [nio-8080-exec-4] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=7)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=7)
+2026-08-30T14:17:50.983-07:00  WARN 14628 --- [wmp] [nio-8080-exec-5] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=6)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:17:50.997-07:00  WARN 14628 --- [wmp] [nio-8080-exec-3] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30006ms (total=10, active=10, idle=0, waiting=5)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30006ms (total=10, active=10, idle=0, waiting=5)
+2026-08-30T14:17:51.013-07:00  WARN 14628 --- [wmp] [io-8080-exec-11] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30013ms (total=10, active=10, idle=0, waiting=4)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30013ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:17:51.031-07:00  WARN 14628 --- [wmp] [nio-8080-exec-6] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=1)
+2026-08-30T14:17:51.031-07:00  WARN 14628 --- [wmp] [nio-8080-exec-8] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=2)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=2)
+2026-08-30T14:17:51.031-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30005ms (total=10, active=10, idle=0, waiting=3)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30005ms (total=10, active=10, idle=0, waiting=3)
+2026-08-30T14:17:51.092-07:00  WARN 14628 --- [wmp] [nio-8080-exec-9] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30005ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30005ms (total=10, active=10, idle=0, waiting=0)
+2026-08-30T14:18:21.208-07:00  WARN 14628 --- [wmp] [nio-8080-exec-7] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=7)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=7)
+2026-08-30T14:18:21.257-07:00  WARN 14628 --- [wmp] [io-8080-exec-10] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30011ms (total=10, active=10, idle=0, waiting=6)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30011ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:18:21.288-07:00  WARN 14628 --- [wmp] [nio-8080-exec-1] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=5)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=5)
+2026-08-30T14:18:21.304-07:00  WARN 14628 --- [wmp] [nio-8080-exec-4] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=4)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:18:21.319-07:00  WARN 14628 --- [wmp] [nio-8080-exec-5] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30000ms (total=10, active=10, idle=0, waiting=3)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms (total=10, active=10, idle=0, waiting=3)
+2026-08-30T14:18:21.334-07:00  WARN 14628 --- [wmp] [nio-8080-exec-3] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=1)
+2026-08-30T14:18:21.334-07:00  WARN 14628 --- [wmp] [io-8080-exec-11] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30009ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30010ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30009ms (total=10, active=10, idle=0, waiting=1)
+2026-08-30T14:18:21.367-07:00  WARN 14628 --- [wmp] [nio-8080-exec-8] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=0)
+2026-08-30T14:18:51.448-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30008ms (total=10, active=10, idle=0, waiting=7)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30008ms (total=10, active=10, idle=0, waiting=7)
+2026-08-30T14:18:51.509-07:00  WARN 14628 --- [wmp] [nio-8080-exec-9] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30015ms (total=10, active=10, idle=0, waiting=6)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30015ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:18:51.525-07:00  WARN 14628 --- [wmp] [nio-8080-exec-6] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=5)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=5)
+2026-08-30T14:18:51.542-07:00  WARN 14628 --- [wmp] [io-8080-exec-10] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30002ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:18:51.544-07:00  WARN 14628 --- [wmp] [nio-8080-exec-7] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30018ms (total=10, active=10, idle=0, waiting=3)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30018ms (total=10, active=10, idle=0, waiting=3)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30002ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:18:51.573-07:00  WARN 14628 --- [wmp] [nio-8080-exec-4] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=1)
+2026-08-30T14:18:51.573-07:00  WARN 14628 --- [wmp] [nio-8080-exec-1] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30012ms (total=10, active=10, idle=0, waiting=1)
+2026-08-30T14:18:51.610-07:00  WARN 14628 --- [wmp] [nio-8080-exec-5] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30026ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30026ms (total=10, active=10, idle=0, waiting=0)
+2026-08-30T14:19:21.801-07:00  WARN 14628 --- [wmp] [nio-8080-exec-3] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=7)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=7)
+2026-08-30T14:19:21.829-07:00  WARN 14628 --- [wmp] [nio-8080-exec-8] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=6)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30014ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:19:21.861-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30003ms (total=10, active=10, idle=0, waiting=5)
+2026-08-30T14:19:21.861-07:00  WARN 14628 --- [wmp] [io-8080-exec-11] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30004ms (total=10, active=10, idle=0, waiting=4)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30004ms (total=10, active=10, idle=0, waiting=4)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30003ms (total=10, active=10, idle=0, waiting=5)
+2026-08-30T14:19:21.879-07:00  WARN 14628 --- [wmp] [nio-8080-exec-9] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30013ms (total=10, active=10, idle=0, waiting=3)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30013ms (total=10, active=10, idle=0, waiting=3)
+2026-08-30T14:19:21.893-07:00  WARN 14628 --- [wmp] [nio-8080-exec-7] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30001ms (total=10, active=10, idle=0, waiting=1)
+2026-08-30T14:19:21.893-07:00  WARN 14628 --- [wmp] [io-8080-exec-10] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30001ms (total=10, active=10, idle=0, waiting=2)
+2026-08-30T14:19:21.895-07:00  WARN 14628 --- [wmp] [nio-8080-exec-6] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30004ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30001ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30001ms (total=10, active=10, idle=0, waiting=2)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30004ms (total=10, active=10, idle=0, waiting=0)
+2026-08-30T14:19:52.044-07:00  WARN 14628 --- [wmp] [nio-8080-exec-4] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30006ms (total=10, active=10, idle=0, waiting=7)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30006ms (total=10, active=10, idle=0, waiting=7)
+2026-08-30T14:19:52.094-07:00  WARN 14628 --- [wmp] [nio-8080-exec-5] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30005ms (total=10, active=10, idle=0, waiting=6)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30005ms (total=10, active=10, idle=0, waiting=6)
+2026-08-30T14:19:52.118-07:00  WARN 14628 --- [wmp] [nio-8080-exec-1] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=4)
+2026-08-30T14:19:52.119-07:00  WARN 14628 --- [wmp] [nio-8080-exec-3] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30000ms (total=10, active=10, idle=0, waiting=5)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=4)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms (total=10, active=10, idle=0, waiting=5)
+2026-08-30T14:19:52.143-07:00  WARN 14628 --- [wmp] [nio-8080-exec-8] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30004ms (total=10, active=10, idle=0, waiting=3)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30004ms (total=10, active=10, idle=0, waiting=3)
+2026-08-30T14:19:52.153-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30005ms (total=10, active=10, idle=0, waiting=2)
+2026-08-30T14:19:52.155-07:00  WARN 14628 --- [wmp] [io-8080-exec-11] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30006ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30006ms (total=10, active=10, idle=0, waiting=1)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30005ms (total=10, active=10, idle=0, waiting=2)
+2026-08-30T14:19:52.177-07:00  WARN 14628 --- [wmp] [nio-8080-exec-9] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30007ms (total=10, active=10, idle=0, waiting=0)
+2026-08-30T14:22:36.789-07:00  WARN 14628 --- [wmp] [nio-8080-exec-6] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30015ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30015ms (total=10, active=10, idle=0, waiting=0)
+2026-08-30T14:23:17.031-07:00  WARN 14628 --- [wmp] [nio-8080-exec-2] org.hibernate.orm.jdbc.error             : HikariPool-1 - Connection is not available, request timed out after 30011ms (total=10, active=10, idle=0, waiting=0)
+java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30011ms (total=10, active=10, idle=0, waiting=0)
+```

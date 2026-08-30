@@ -1,0 +1,248 @@
+===== sample #1 at 2026-08-30T21:16:23.586Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":9.0
+hikaricp.connections.timeout: "value":0.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #2 at 2026-08-30T21:16:38.099Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":9.0
+hikaricp.connections.timeout: "value":0.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #3 at 2026-08-30T21:16:52.437Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":9.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #4 at 2026-08-30T21:17:06.939Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":9.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #5 at 2026-08-30T21:17:21.290Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":17.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #6 at 2026-08-30T21:17:36.386Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":17.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #7 at 2026-08-30T21:17:50.335Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":17.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #8 at 2026-08-30T21:18:04.720Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":25.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #9 at 2026-08-30T21:18:18.737Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":25.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #10 at 2026-08-30T21:18:32.738Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":33.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #11 at 2026-08-30T21:18:46.709Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":33.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #12 at 2026-08-30T21:19:00.576Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":41.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #13 at 2026-08-30T21:19:14.613Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":41.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #14 at 2026-08-30T21:19:28.829Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":49.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #15 at 2026-08-30T21:19:42.800Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":8.0
+hikaricp.connections.timeout: "value":49.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #16 at 2026-08-30T21:19:56.847Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":0.0
+hikaricp.connections.timeout: "value":57.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #17 at 2026-08-30T21:20:11.141Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":0.0
+hikaricp.connections.timeout: "value":57.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #18 at 2026-08-30T21:20:25.109Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":0.0
+hikaricp.connections.timeout: "value":57.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+===== sample #19 at 2026-08-30T21:20:39.043Z =====
+-- hikaricp connections --
+hikaricp.connections.active: "value":10.0
+hikaricp.connections.idle: "value":0.0
+hikaricp.connections.pending: "value":0.0
+hikaricp.connections.timeout: "value":57.0
+-- pg_stat_activity by state --
+ active |     1
+ idle   |    10
+
+-- idle-in-transaction sessions with age --
+
+
+SAMPLING COMPLETE at 2026-08-30T21:20:53.106Z

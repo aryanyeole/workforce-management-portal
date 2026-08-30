@@ -1,0 +1,2 @@
+test start: 2026-08-30T21:15:39.659Z
+accrual trigger sent at: 2026-08-30T21:16:17.776Z
