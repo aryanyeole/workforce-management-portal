@@ -33,7 +33,7 @@ Backend packages: `com.aryanyeole.wmp.<domain>` where domain is `auth`, `payroll
 4. **Migrations are append-only.** Never edit an applied Flyway file.
 5. **Every endpoint gets an integration test** against Testcontainers Postgres, including a 403 case.
 6. **No `LIMIT/OFFSET` on the approvals queue** after Phase 6. Keyset only, opaque cursors.
-7. **Every connection/statement is closed.** Try-with-resources everywhere except the deliberately-leaky batch job in Phase 8, which is marked with a `// INTENTIONAL LEAK — see docs/incidents/` comment until it's fixed.
+7. **Every connection/statement is closed.** Try-with-resources everywhere, including batch jobs that acquire connections via raw `DataSource.getConnection()`. See `docs/incidents/2026-08-payroll-500s.md` for what happens when they aren't.
 8. **Secrets come from env vars.** Nothing real in `application.yml`.
 
 ## Working style
