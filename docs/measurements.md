@@ -604,3 +604,115 @@ Neither half of "keyset pagination + a matching index" is sufficient alone — e
 - **Only state 3 (keyset + index) is fast *and* flat.** It is the sole cell where deep pages cost the same as page 1 (query time 0.2-0.9 ms regardless of depth, HTTP p50 ~21-26 ms regardless of depth) — every other cell either degrades with depth (state 2), is uniformly slow (states 1 and 4), or both.
 
 State 4 (keyset, no index) completes the 2×2 for the Task D comparison.
+
+## Phase 9, Task 2 — Frontend infinite scroll, unvirtualized baseline
+
+**Date:** 2026-08-31
+**Environment:** `frontend` @ commit `0a88a2b` (Task 2, the unvirtualized baseline — kept in history untouched). Backend under `dev` profile, `wmp-db` dev container, unchanged since Phase 6/7. Principal: `katherine.johnson@wmp.dev` (`PAYROLL_ADMIN`, `VisibilityScope.Unrestricted`), same 20,976-row `SUBMITTED` queue used throughout Phase 6/7. Driven by a real Chromium browser (Playwright, scratch-only — not a project dependency), scrolling the live UI, not a synthetic harness.
+
+### Network latency (Resource Timing API, per `GET /api/v1/expenses/approvals` request)
+
+```
+first 10 requests (ms): 32,43,41,32,43,30,31,33,28,37
+last 10 requests (ms):  49,47,30,31,48,41,61,52,56,43
+```
+
+Flat throughout, no depth correlation — first-10 mean ≈ 35 ms, last-10 mean ≈ 45.8 ms, both well within the same noise band as every prior keyset+index measurement in this document (state 3's 21-26 ms HTTP p50, Task C's 0.2-0.9 ms query time). This is the load-bearing finding of this section: **the backend does not slow down with scroll depth.**
+
+### Wall-clock time to reach each row-count checkpoint (same browser session, same scroll loop)
+
+| Rows added | Cumulative elapsed | Time for this batch | Cost per row |
+|---|---|---|---|
+| 0 → 50 | 9 ms | 9 ms | 0.18 ms/row |
+| 50 → 500 | 1,007 ms | 998 ms | 2.22 ms/row |
+| 500 → 1,000 | 2,280 ms | 1,273 ms | 2.55 ms/row |
+| 1,000 → 2,000 | 11,647 ms | 9,367 ms | 9.37 ms/row |
+| 2,000 → 3,000 | 32,720 ms | 21,073 ms | 21.07 ms/row |
+| 3,000 → 4,000 | 61,276 ms | 28,556 ms | 28.56 ms/row |
+
+Cost per row climbs roughly 13x from the first real batch (50→500) to the last (3,000→4,000) — a real, substantial degradation as depth grows.
+
+### DOM node count vs. row count
+
+```
+389 nodes at 50 rows
+28,389 nodes at 4,000 rows
+```
+
+`(28,389 − 389) / (4,000 − 50) ≈ 7.09 nodes/row` — **linear** growth, no surprises there; every row's own markup (a `<tr>` + 6 `<td>`s + text nodes) is a fixed, small, constant cost.
+
+### The finding, stated plainly
+
+**Network stayed flat. Rendering did not.** DOM node count grows linearly (expected — nothing recycles a row once mounted), but the *wall-clock cost of mounting each additional batch* grows much faster than linear — consistent with React reconciliation and browser layout cost compounding across an ever-larger, entirely-mounted tree. The keyset pagination this whole document has been measuring since Phase 6 is doing exactly what it promised at every depth tested; the thing that doesn't hold up past a few thousand rows is keeping every previously-fetched row mounted in the DOM forever. ROADMAP's "scroll to row 40,000 without the UI degrading" claim is **not met** by this (Task 2) implementation — Task 2b addresses this with virtualization; see below for the after numbers.
+
+## Phase 9, Task 2b — Frontend infinite scroll, virtualized (after)
+
+**Date:** 2026-08-31 (continued). **Environment:** identical to Task 2 above — same `dev`-profile backend, same `wmp-db` container, same principal `katherine.johnson@wmp.dev` (`PAYROLL_ADMIN`, `Unrestricted`), same 20,976-row `SUBMITTED` queue, same Playwright-driven real Chromium, same Resource Timing API method, same checkpoint scheme, extended further. The only change under test is `ApprovalsTable.tsx` now rendering through `@tanstack/react-virtual`'s `useVirtualizer` instead of mounting every fetched row (see the component's doc comment for the fetch-trigger redesign this required). `useInfiniteQuery` and the cursor contract are byte-for-byte unchanged from Task 2.
+
+One methodology fix versus Task 2: the default Resource Timing buffer (250 entries) silently drops entries once full rather than evicting old ones, which would have quietly corrupted the "last 10" figures at this depth (420 requests, comfortably over 250). Fixed by calling `performance.setResourceTimingBufferSize(2000)` right after page load, before login. Two full runs were captured — one before this fix (`RESULT_requestCount: 226`, confirming the drop) and one after (`RESULT_requestCount: 420`, matching the true request count exactly) — the numbers below are from the corrected run. Both runs' checkpoint/DOM/wall-clock figures agree closely, which is itself a useful reproducibility check.
+
+### Depth reached
+
+**The full real queue — 20,976 rows — not 40,000.** The run drove the virtualizer to genuine end-of-list (`nextCursor: null`, sentinel rendered live as `"End of list — 20976 total shown."`) with no stall and no degradation observed at any point along the way. 40,000 was the stretch target Task 2b asked for, but katherine.johnson's seeded `SUBMITTED` queue — the same one used throughout Phase 6/7 and Task 2 — only has 20,976 rows; there is no real seeded data past that to scroll into. Reaching the true end of the only large real dataset available is treated here as the honest result rather than reporting a partial number against an unreachable target.
+
+### Network latency (Resource Timing API, per `GET /api/v1/expenses/approvals` request, n=420)
+
+```
+first 10 requests (ms): 20,19,27,25,27,27,28,30,28,27
+last 10 requests (ms):  43,28,24,57,39,25,31,29,30,28
+```
+
+First-10 mean ≈ 25.8 ms, last-10 mean ≈ 33.4 ms — flat, no depth correlation, same as Task 2 (and if anything slightly faster, within noise — nothing on the backend changed). This finding was never in question for Task 2b; it's included again to show the backend still holds at 8x the previous depth.
+
+### Wall-clock time to reach each row-count checkpoint (cumulative elapsed, from network response interception — see Correctness below for why)
+
+| Rows added | Cumulative elapsed | Time for this batch | Cost per row |
+|---|---|---|---|
+| 0 → 50 | 4 ms | 4 ms | 0.08 ms/row |
+| 50 → 500 | 1,007 ms | 1,003 ms | 2.23 ms/row |
+| 500 → 1,000 | 2,107 ms | 1,100 ms | 2.20 ms/row |
+| 1,000 → 2,000 | 4,330 ms | 2,223 ms | 2.22 ms/row |
+| 2,000 → 3,000 | 6,583 ms | 2,253 ms | 2.25 ms/row |
+| 3,000 → 4,000 | 8,804 ms | 2,221 ms | 2.22 ms/row |
+| 4,000 → 5,000 | 11,067 ms | 2,263 ms | 2.26 ms/row |
+| 5,000 → 8,000 | 17,727 ms | 6,660 ms | 2.22 ms/row |
+| 8,000 → 10,000 | 22,130 ms | 4,403 ms | 2.20 ms/row |
+| 10,000 → 15,000 | 33,093 ms | 10,963 ms | 2.19 ms/row |
+| 15,000 → 20,000 | 44,237 ms | 5,144 ms | 2.23 ms/row |
+| 20,000 → 20,976 (end) | 46,430 ms | 2,193 ms | 2.25 ms/row |
+
+Cost per row is **flat at ~2.2 ms/row from the 500-row mark all the way to the true end of the 20,976-row queue** — no growth at all, versus Task 2's climb from 2.22 ms/row to 28.56 ms/row (~13x) over just the first 4,000 rows. The whole 20,976-row queue loaded in 46.4 seconds total, wall clock, in a real browser.
+
+### DOM node count vs. row count
+
+```
+213 nodes at 50 rows
+297 nodes at 500 rows through 20,000 rows (no change)
+298 nodes at 20,976 rows (end-of-list marker text adds one)
+```
+
+Flat, not linear — the defining difference from Task 2's 389 → 28,389 (7.09 nodes/row). The rendered row count (`.approvals-row` elements actually in the DOM) was checked at every checkpoint too and stayed at exactly **37** rows from 500 rows onward regardless of how many rows had loaded, confirming the virtualizer is genuinely windowing the render rather than accumulating it.
+
+### Correctness verification (step 5 — unique IDs, exact sequence match)
+
+With virtualization mounting only ~37 of 20,976 rows at any moment, reading IDs from the DOM (Task 2's method) can no longer see the full sequence — most rows are never mounted at all. Verified instead by intercepting the network responses themselves: a Playwright `page.on('response')` listener captured the JSON body of every `/api/v1/expenses/approvals` request as it happened and appended `content[].id` in arrival order, building the full 20,976-ID sequence independent of what React chose to render. This is not a workaround forced by virtualization — it's a more direct check than DOM-scraping was to begin with, since it verifies exactly what the server sent rather than what the renderer happened to keep mounted.
+
+- Rows collected: 20,976. Unique: 20,976. Duplicates: **0**.
+- Directly queried Postgres (`SELECT id FROM expense_reports WHERE status='SUBMITTED' ORDER BY submitted_at DESC, id DESC`) for the same principal's full result set: also exactly 20,976 rows.
+- Diffed the two ID sequences position-by-position, full length, not sampled: **0 mismatches** — exact order match across all 20,976 rows and every page boundary (420 pages at size=50), not just the 25-boundary/1,250-row sample Task 2 checked.
+
+### End-of-list verification without new credentials (step 6)
+
+The approvals endpoint does accept a `size` query parameter, bounded server-side to a max of 100 (`ExpenseService.APPROVALS_MAX_SIZE`) — confirmed live: `GET /api/v1/expenses/approvals?size=500` returns exactly 100 rows, not 500. Task 2b asked to use that against a real seeded approver with a modest-but-nonzero queue to reach end-of-list in a few requests. No such account exists: `alan.turing@wmp.dev` (`MANAGER`) is the only other real seeded login, and his direct-reports-plus-self queue is still 0 pending (re-confirmed live: `size=100` request returns `content: []`, `nextCursor: null`) — unchanged from Task 2's finding. No login row was created to manufacture one.
+
+The end-of-list gap is closed a different way instead: this run already scrolled `katherine.johnson`'s real 20,976-row queue to genuine completion and captured the live sentinel rendering `"End of list — 20976 total shown."` with `hasNextPage` correctly false — the actual live end-of-list verification the step wants, just reached via the one real queue that has data rather than a shortcut through a smaller one. `alan.turing`'s empty queue additionally confirms the zero-rows end-of-list path (`nextCursor: null` on the very first response) works too.
+
+### Sentinel-vs-rendered-range fetch trigger (step 3)
+
+Task 2's `IntersectionObserver` watched a sentinel `<div>` placed after the row list. Under virtualization the row list is followed by a spacer sized to `virtualizer.getTotalSize()`, and a sentinel placed after that spacer stays a normal, always-mounted DOM node — it isn't itself one of the virtualized items, so it doesn't disappear. Reasoned through rather than assumed: since the spacer's height tracks `rows.length` (not padded with an extra placeholder row), a sentinel immediately after it would still scroll into view and fire correctly as the user nears the bottom of whatever is currently loaded. **The sentinel approach would not have broken here.**
+
+The rendered-range approach (watching `virtualizer.getVirtualItems()`'s last index against `rows.length`) was used anyway, because it's what `@tanstack/react-virtual`'s own docs recommend for this exact case and it doesn't depend on the spacer's sizing behavior as an implementation detail that could change with a future version. Both `isFetchingNextPage` and `hasNextPage` guards carried over unchanged from Task 2's version to prevent duplicate/overlapping `fetchNextPage()` calls during fast scrolling.
+
+### The finding, stated plainly
+
+Virtualization turned a ~13x-degrading, fully-linear-DOM-growth implementation into one with **flat ~2.2 ms/row cost and flat ~290-node DOM regardless of depth**, verified against the entire real 20,976-row queue rather than a partial run. Network latency was already flat in Task 2 and stays flat here — keyset pagination was never the bottleneck. ROADMAP's "scroll to row 40,000 without the UI degrading" claim is met as far as real seed data allows: the implementation shows zero degradation through the full 20,976-row queue and there is no reason from these numbers (flat cost/row, flat DOM, constant 37-row render window) to expect degradation at 40,000 either — the ceiling here was the dataset, not the UI.
