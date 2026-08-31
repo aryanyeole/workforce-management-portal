@@ -150,8 +150,16 @@ public class ExpenseService {
 
     @Transactional
     public ExpenseResponse submit(AuthPrincipal principal, Long id) {
-        ExpenseReport report = findVisible(id, ownScope(principal));
+        VisibilityScope scope = ownScope(principal);
+        ExpenseReport report = findVisible(id, scope);
         ExpenseTransitions.requireTransition(report.getStatus(), ExpenseStatus.SUBMITTED);
+
+        // Phase 10 Task 0: the check above reads a snapshot that can go
+        // stale before this transaction commits — a concurrent submit of
+        // the same report can pass the same check on its own snapshot
+        // first. compareAndSetStatusOrConflict closes that window; see its
+        // own javadoc and ExpenseReportRepository.compareAndSetStatus.
+        compareAndSetStatusOrConflict(id, scope, report.getStatus(), ExpenseStatus.SUBMITTED);
 
         report.setStatus(ExpenseStatus.SUBMITTED);
         report.setSubmittedAt(Instant.now());
@@ -179,7 +187,8 @@ public class ExpenseService {
      */
     private ExpenseResponse decide(AuthPrincipal principal, Long id, ExpenseStatus targetStatus,
                                     ApprovalAction action, ApprovalDecisionRequest request) {
-        ExpenseReport report = findVisible(id, visibilityScopeResolver.resolve(principal));
+        VisibilityScope scope = visibilityScopeResolver.resolve(principal);
+        ExpenseReport report = findVisible(id, scope);
 
         if (targetStatus == ExpenseStatus.APPROVED
                 && report.getEmployee().getId().equals(principal.employeeId())) {
@@ -187,6 +196,8 @@ public class ExpenseService {
         }
 
         ExpenseTransitions.requireTransition(report.getStatus(), targetStatus);
+        // See submit()'s comment — same race, same guard.
+        compareAndSetStatusOrConflict(id, scope, report.getStatus(), targetStatus);
 
         report.setStatus(targetStatus);
         report.setApprovedAt(Instant.now());
@@ -194,6 +205,33 @@ public class ExpenseService {
 
         recordEvent(report, principal, action, request == null ? null : request.comment());
         return ExpenseMapper.toResponse(report);
+    }
+
+    /**
+     * Phase 10 Task 0. Attempts the guarded write; if another transaction
+     * already moved this report past the status we read, re-checks against
+     * the now-current row so the caller gets the exact same "Cannot
+     * transition expense report from X to Y" message ExpenseTransitions
+     * already produces for the ordinary (non-race) illegal-transition case
+     * — one message-building path, not two that can drift.
+     *
+     * Every transition this guards (DRAFT->SUBMITTED, SUBMITTED->APPROVED|
+     * REJECTED) targets a status whose own outgoing transitions are either
+     * a single next step or terminal — there is no path back to `expected`
+     * once it's left behind, so a failed compare-and-swap always means the
+     * current status has moved strictly past `expected`, and
+     * requireTransition below is guaranteed to throw. The trailing
+     * ConflictException is a defensive fallback for that reasoning being
+     * wrong someday (e.g. a future transition graph gains a cycle), not a
+     * path this codebase's current state machine can actually reach.
+     */
+    private void compareAndSetStatusOrConflict(Long id, VisibilityScope scope, ExpenseStatus expected, ExpenseStatus next) {
+        int updated = expenseReportRepository.compareAndSetStatus(id, expected, next);
+        if (updated == 0) {
+            ExpenseReport current = findVisible(id, scope);
+            ExpenseTransitions.requireTransition(current.getStatus(), next);
+            throw new ConflictException("Expense report was concurrently modified; please retry");
+        }
     }
 
     /**

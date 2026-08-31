@@ -176,6 +176,12 @@ public class PayrollService {
                 throw new ConflictException("Cannot submit a payroll run with no items");
             }
 
+            // Phase 10 Task 0: same read-check-then-write race as
+            // ExpenseService.submit/decide — see
+            // PayrollRunRepository.compareAndSetStatus and
+            // ExpenseService.compareAndSetStatusOrConflict's javadoc.
+            compareAndSetStatusOrConflict(runId, run.getStatus(), PayrollRunStatus.SUBMITTED);
+
             run.setStatus(PayrollRunStatus.SUBMITTED);
             run.setSubmittedBy(userAccountRepository.getReferenceById(principal.userAccountId()));
             run.setSubmittedAt(Instant.now());
@@ -208,6 +214,8 @@ public class PayrollService {
         }
 
         PayrollTransitions.requireTransition(run.getStatus(), targetStatus);
+        // See submit()'s comment — same race, same guard.
+        compareAndSetStatusOrConflict(runId, run.getStatus(), targetStatus);
 
         run.setStatus(targetStatus);
         run.setApprovedBy(userAccountRepository.getReferenceById(principal.userAccountId()));
@@ -215,6 +223,22 @@ public class PayrollService {
 
         recordEvent(run, principal, action, request == null ? null : request.comment());
         return PayrollMapper.toResponse(run);
+    }
+
+    /**
+     * Phase 10 Task 0 — mirrors ExpenseService.compareAndSetStatusOrConflict;
+     * see that javadoc for the race this closes and why a failed
+     * compare-and-swap is guaranteed to make requireTransition throw below
+     * rather than silently pass (PayrollRunStatus's transitions are all
+     * single-step or terminal, same as ExpenseStatus).
+     */
+    private void compareAndSetStatusOrConflict(Long runId, PayrollRunStatus expected, PayrollRunStatus next) {
+        int updated = payrollRunRepository.compareAndSetStatus(runId, expected, next);
+        if (updated == 0) {
+            PayrollRun current = requireRun(runId);
+            PayrollTransitions.requireTransition(current.getStatus(), next);
+            throw new ConflictException("Payroll run was concurrently modified; please retry");
+        }
     }
 
     private void recordEvent(PayrollRun run, AuthPrincipal principal, ApprovalAction action, String comment) {
