@@ -15,6 +15,7 @@ import com.aryanyeole.wmp.common.repository.DepartmentRepository;
 import com.aryanyeole.wmp.common.security.AuthPrincipal;
 import com.aryanyeole.wmp.common.security.VisibilityScope;
 import com.aryanyeole.wmp.common.security.VisibilityScopeResolver;
+import com.aryanyeole.wmp.common.web.ConflictException;
 import com.aryanyeole.wmp.common.web.NotFoundException;
 import com.aryanyeole.wmp.onboarding.api.CreateEmployeeRequest;
 import com.aryanyeole.wmp.onboarding.api.EmployeeResponse;
@@ -91,6 +92,24 @@ public class EmployeeService {
     public EmployeeResponse update(AuthPrincipal principal, Long id, UpdateEmployeeRequest request) {
         Employee employee = requireVisible(principal, id);
 
+        // The employmentStatus branch is handled first and, when present,
+        // entirely before any other field on this PATCH is touched
+        // (Phase 10 Task 0b). A concurrent update can race this same
+        // transition past the check below exactly like
+        // ExpenseService.submit/decide and PayrollService.submit/decide did
+        // before their own fix — compareAndSetStatusOrConflict closes it the
+        // same way. Doing this guarded write before any other field mutates
+        // the entity means a lost race throws before there's anything else
+        // in this request to roll back, rather than relying on reasoning
+        // about transaction/flush ordering to prove it: if the whole method
+        // never gets past this point, no other field mutation in it has
+        // happened yet.
+        if (request.employmentStatus() != null) {
+            EmployeeTransitions.requireTransition(employee.getEmploymentStatus(), request.employmentStatus());
+            compareAndSetStatusOrConflict(principal, id, employee.getEmploymentStatus(), request.employmentStatus());
+            employee.setEmploymentStatus(request.employmentStatus());
+        }
+
         if (request.firstName() != null) {
             employee.setFirstName(request.firstName());
         }
@@ -106,12 +125,41 @@ public class EmployeeService {
         if (request.managerId() != null) {
             employee.setManager(requireManager(request.managerId()));
         }
-        if (request.employmentStatus() != null) {
-            EmployeeTransitions.requireTransition(employee.getEmploymentStatus(), request.employmentStatus());
-            employee.setEmploymentStatus(request.employmentStatus());
-        }
 
         return EmployeeMapper.toResponse(employee);
+    }
+
+    /**
+     * Phase 10 Task 0b — mirrors ExpenseService.compareAndSetStatusOrConflict
+     * and PayrollService.compareAndSetStatusOrConflict; see either's javadoc
+     * for the race this closes. Re-fetches and re-runs the existing
+     * EmployeeTransitions check on a lost race so the caller gets the same
+     * "Cannot transition employee from X to Y" wording the ordinary
+     * (non-race) illegal-transition case already produces — one
+     * message-building path, not two that can drift.
+     *
+     * Unlike ExpenseStatus/PayrollRunStatus (both strictly terminal, no path
+     * back to an already-left state), EmploymentStatus has a real cycle
+     * (ACTIVE <-> ON_LEAVE) and EmployeeTransitions.requireTransition
+     * explicitly no-ops when current == target. That makes the trailing
+     * ConflictException here reachable, not just defensive: if this
+     * request's own losing race happens to land on the exact target another
+     * concurrent request already set (e.g. two callers both racing
+     * ACTIVE -> ON_LEAVE), the re-check sees current == target and returns
+     * normally instead of throwing, and this caller still gets a 409 rather
+     * than a silent 200 for a transition it did not itself win — its own
+     * read of "current" was stale at the moment it decided to act, which is
+     * exactly the condition a 409 exists to report, regardless of what the
+     * row ended up holding.
+     */
+    private void compareAndSetStatusOrConflict(AuthPrincipal principal, Long id,
+                                                EmploymentStatus expected, EmploymentStatus next) {
+        int updated = employeeRepository.compareAndSetStatus(id, expected, next);
+        if (updated == 0) {
+            Employee current = requireVisible(principal, id);
+            EmployeeTransitions.requireTransition(current.getEmploymentStatus(), next);
+            throw new ConflictException("Employee was concurrently modified; please retry");
+        }
     }
 
     @Transactional

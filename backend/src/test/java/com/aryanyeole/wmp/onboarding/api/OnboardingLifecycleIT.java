@@ -176,6 +176,25 @@ class OnboardingLifecycleIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void patchWithoutEmploymentStatus_needsNoCompareAndSwap() throws Exception {
+        // Phase 10 Task 0b: EmployeeService.update's employmentStatus branch
+        // (and the compare-and-swap guard inside it) is only entered when
+        // the patch actually supplies employmentStatus. A patch that omits
+        // it entirely must behave exactly as it did before that guard
+        // existed -- other fields apply, employmentStatus is untouched.
+        EmploymentStatus before = employeeRepository.findById(employeeA.getId()).orElseThrow().getEmploymentStatus();
+
+        mockMvc.perform(patch("/api/v1/onboarding/employees/" + employeeA.getId())
+                        .header("Authorization", "Bearer " + hrAdminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"Renamed"}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firstName").value("Renamed"))
+                .andExpect(jsonPath("$.employmentStatus").value(before.name()));
+    }
+
+    @Test
     void managerCannotPatchEmployees_hrAdminOnly() throws Exception {
         mockMvc.perform(patch("/api/v1/onboarding/employees/" + employeeA.getId())
                         .header("Authorization", "Bearer " + managerToken)
