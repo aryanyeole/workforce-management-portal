@@ -77,3 +77,88 @@ export interface CursorPageResponse<T> {
   content: T[];
   nextCursor: string | null;
 }
+
+/** See com.aryanyeole.wmp.expense.api.ExpenseCategoryResponse. */
+export interface ExpenseCategoryResponse {
+  id: number;
+  name: string;
+  description: string | null;
+}
+
+/** See com.aryanyeole.wmp.expense.api.CreateExpenseRequest. */
+export interface CreateExpenseRequest {
+  categoryId: number;
+  amountCents: number;
+  currency?: string;
+  description?: string;
+}
+
+/**
+ * Envelope for classic offset-paginated (page/size) endpoints — see
+ * com.aryanyeole.wmp.common.api.PageResponse. Distinct from
+ * CursorPageResponse above: this one carries page/totalPages because the
+ * lists it fronts (own expenses, the onboarding employee directory) are a
+ * few hundred rows at most, not the 21k-row approvals queue keyset exists
+ * for — see docs/adr/0002-keyset-pagination.md's "what offset pagination
+ * is still better at."
+ */
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export type EmploymentStatus = 'PENDING' | 'ACTIVE' | 'ON_LEAVE' | 'TERMINATED';
+
+/** See com.aryanyeole.wmp.onboarding.api.EmployeeResponse. */
+export interface EmployeeResponse {
+  id: number;
+  departmentId: number | null;
+  departmentName: string | null;
+  managerId: number | null;
+  firstName: string;
+  lastName: string;
+  email: string;
+  hireDate: string;
+  employmentStatus: EmploymentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type OnboardingTaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+
+/** See com.aryanyeole.wmp.onboarding.api.TaskResponse. */
+export interface TaskResponse {
+  id: number;
+  employeeId: number;
+  title: string;
+  description: string | null;
+  status: OnboardingTaskStatus;
+  dueDate: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** See com.aryanyeole.wmp.onboarding.api.CreateTaskRequest. */
+export interface CreateTaskRequest {
+  title: string;
+  description?: string;
+  dueDate?: string;
+}
+
+export type OnboardingDocumentStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+
+/** See com.aryanyeole.wmp.onboarding.api.DocumentResponse — metadata only. */
+export interface DocumentResponse {
+  id: number;
+  employeeId: number;
+  documentType: string;
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
+  status: OnboardingDocumentStatus;
+  uploadedAt: string;
+}

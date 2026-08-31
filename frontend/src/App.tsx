@@ -4,22 +4,32 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './components/LoginPage';
 import { Shell, type View } from './components/Shell';
 import { ApprovalsTable } from './features/approvals/ApprovalsTable';
+import { MyExpensesView } from './features/expenses/MyExpensesView';
+import { OnboardingView } from './features/onboarding/OnboardingView';
 
 const queryClient = new QueryClient();
 
 function ViewContent({ view }: { view: View }) {
   switch (view) {
+    case 'expenses':
+      return <MyExpensesView />;
     case 'approvals':
       return <ApprovalsTable />;
+    case 'onboarding':
+      return <OnboardingView />;
     default:
-      // My Expenses / Payroll / Onboarding land in Phase 9 Task 4.
-      return <p>Not built yet — Phase 9 Task 4.</p>;
+      // Payroll is still out of scope — Phase 9 never asked for it.
+      return <p>Not built yet.</p>;
   }
 }
 
 function AppShell() {
   const { status, user } = useAuth();
-  const [view, setView] = useState<View>('approvals');
+  // 'expenses' (My Expenses) is the one view every role's nav includes
+  // (Shell.tsx's NAV_ITEMS), so it's a safe universal default — unlike the
+  // old default of 'approvals', which an EMPLOYEE has no nav link to and
+  // would land on to an immediate 403 before clicking anything.
+  const [view, setView] = useState<View>('expenses');
 
   if (status === 'loading') {
     return <div className="app-loading">Loading…</div>;

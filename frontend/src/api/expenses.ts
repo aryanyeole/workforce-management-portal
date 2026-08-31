@@ -1,5 +1,43 @@
 import { apiFetch } from './client';
-import type { CursorPageResponse, ExpenseResponse } from './types';
+import type { CreateExpenseRequest, CursorPageResponse, ExpenseCategoryResponse, ExpenseResponse, PageResponse } from './types';
+
+/** Own-expenses list page size (Phase 9 Task 4) — small, offset-paginated, not the approvals queue. */
+export const MY_EXPENSES_PAGE_SIZE = 20;
+
+/**
+ * GET /api/v1/expenses — the caller's own expense reports (VisibilityScope
+ * on the backend, not a query param here). Offset-paginated (page/size),
+ * unlike /approvals: this list is at most a few hundred rows for any one
+ * employee, nowhere near the 20,976-row approvals queue keyset pagination
+ * exists for (docs/adr/0002-keyset-pagination.md) — no cursor, no
+ * virtualization here, plain page/size.
+ */
+export function fetchMyExpenses(page: number): Promise<PageResponse<ExpenseResponse>> {
+  const params = new URLSearchParams({ page: String(page), size: String(MY_EXPENSES_PAGE_SIZE) });
+  return apiFetch<PageResponse<ExpenseResponse>>(`/api/v1/expenses?${params.toString()}`);
+}
+
+/** GET /api/v1/expenses/categories — plain list, no pagination at all. */
+export function fetchExpenseCategories(): Promise<ExpenseCategoryResponse[]> {
+  return apiFetch<ExpenseCategoryResponse[]>('/api/v1/expenses/categories');
+}
+
+/**
+ * POST /api/v1/expenses — creates a DRAFT report. Distinct from submit
+ * below: this alone never moves anything into the approvals queue (Task 4
+ * point 1 — do not collapse the two into one action).
+ */
+export function createExpense(request: CreateExpenseRequest): Promise<ExpenseResponse> {
+  return apiFetch<ExpenseResponse>('/api/v1/expenses', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+}
+
+/** POST /api/v1/expenses/{id}/submit — DRAFT -> SUBMITTED. 409 (via ExpenseTransitions) if not currently DRAFT. */
+export function submitExpense(id: number): Promise<ExpenseResponse> {
+  return apiFetch<ExpenseResponse>(`/api/v1/expenses/${id}/submit`, { method: 'POST' });
+}
 
 /**
  * Matches the depths measured in docs/measurements.md's Phase 6/7 keyset

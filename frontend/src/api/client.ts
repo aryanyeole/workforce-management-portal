@@ -47,7 +47,11 @@ function buildRequest(init: RequestInit, accessToken: string | null): RequestIni
   if (accessToken) {
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
-  if (init.body && !headers.has('Content-Type')) {
+  // FormData (Phase 9 Task 4: onboarding document upload) must NOT get a
+  // hand-set Content-Type — the browser generates its own
+  // multipart/form-data boundary, and overriding it with 'application/json'
+  // here would silently corrupt every multipart request.
+  if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
   return { ...init, headers };
