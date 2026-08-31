@@ -184,29 +184,53 @@ body {
 
 .approvals-table-wrap {
   overflow-x: auto;
-}
-
-.approvals-table {
-  width: 100%;
-  border-collapse: collapse;
   background: #fff;
   font-size: 0.88rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
 }
 
-.approvals-table th,
-.approvals-table td {
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
-  text-align: left;
-  white-space: nowrap;
+/* Rows are CSS Grid, not <table>/<tr>, because react-virtual positions each
+   row with `position: absolute; transform: translateY(...)` — that breaks
+   native table row layout (column alignment relies on the table's own
+   layout algorithm, which absolutely-positioned <tr>s fall out of), so
+   header and body columns are aligned via a shared grid-template-columns
+   instead. See ApprovalsTable.tsx's doc comment. */
+.approvals-header-row,
+.approvals-row {
+  display: grid;
+  align-items: center;
+  column-gap: 0.75rem;
 }
 
-.approvals-table th {
+.approvals-header-row {
   position: sticky;
   top: 0;
+  z-index: 1;
+  padding: 0.5rem 0.75rem;
   background: #f9fafb;
   font-weight: 600;
   color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.approvals-scroll-container {
+  height: calc(100vh - 260px);
+  min-height: 320px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.approvals-row {
+  padding: 0 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.approvals-cell-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .approvals-sentinel {
