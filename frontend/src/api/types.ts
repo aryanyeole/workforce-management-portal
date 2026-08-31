@@ -46,3 +46,34 @@ export interface ProblemDetail {
   detail?: string;
   instance?: string;
 }
+
+export type ExpenseStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+
+/** See com.aryanyeole.wmp.expense.api.ExpenseResponse. */
+export interface ExpenseResponse {
+  id: number;
+  employeeId: number;
+  categoryId: number;
+  categoryName: string;
+  amountCents: number;
+  currency: string;
+  description: string;
+  status: ExpenseStatus;
+  submittedAt: string | null;
+  approverId: number | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Envelope for keyset-paginated endpoints — see
+ * com.aryanyeole.wmp.common.api.CursorPageResponse and
+ * docs/adr/0002-keyset-pagination.md. `nextCursor` is opaque by contract:
+ * this app only ever passes it back verbatim as the next request's
+ * `cursor` param, never decodes or inspects it (see src/api/expenses.ts).
+ */
+export interface CursorPageResponse<T> {
+  content: T[];
+  nextCursor: string | null;
+}

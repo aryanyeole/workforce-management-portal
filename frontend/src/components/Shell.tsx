@@ -2,6 +2,9 @@ import type { ReactNode } from 'react';
 import type { RoleCode } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 
+/** No router yet (none approved beyond the Task 1 stack) — Shell just swaps `children` based on this. */
+export type View = 'expenses' | 'approvals' | 'payroll' | 'onboarding';
+
 /**
  * Nav links, keyed by which roles see them.
  *
@@ -14,14 +17,20 @@ import { useAuth } from '../auth/AuthContext';
  * shown a link gets nothing extra from that — the backend checks again on
  * every request either way. Treat this list as a menu, not a lock.
  */
-const NAV_ITEMS: { label: string; roles: RoleCode[] }[] = [
-  { label: 'My Expenses', roles: ['EMPLOYEE', 'MANAGER', 'PAYROLL_ADMIN', 'HR_ADMIN'] },
-  { label: 'Approvals', roles: ['MANAGER', 'PAYROLL_ADMIN'] },
-  { label: 'Payroll', roles: ['PAYROLL_ADMIN'] },
-  { label: 'Onboarding', roles: ['HR_ADMIN', 'MANAGER'] },
+const NAV_ITEMS: { label: string; view: View; roles: RoleCode[] }[] = [
+  { label: 'My Expenses', view: 'expenses', roles: ['EMPLOYEE', 'MANAGER', 'PAYROLL_ADMIN', 'HR_ADMIN'] },
+  { label: 'Approvals', view: 'approvals', roles: ['MANAGER', 'PAYROLL_ADMIN'] },
+  { label: 'Payroll', view: 'payroll', roles: ['PAYROLL_ADMIN'] },
+  { label: 'Onboarding', view: 'onboarding', roles: ['HR_ADMIN', 'MANAGER'] },
 ];
 
-export function Shell({ children }: { children: ReactNode }) {
+interface ShellProps {
+  activeView: View;
+  onNavigate: (view: View) => void;
+  children: ReactNode;
+}
+
+export function Shell({ activeView, onNavigate, children }: ShellProps) {
   const { user, logout } = useAuth();
   const visibleItems = NAV_ITEMS.filter((item) => user && item.roles.includes(user.role));
 
@@ -42,7 +51,15 @@ export function Shell({ children }: { children: ReactNode }) {
         <nav className="shell-nav">
           <ul>
             {visibleItems.map((item) => (
-              <li key={item.label}>{item.label}</li>
+              <li key={item.view}>
+                <button
+                  type="button"
+                  className={item.view === activeView ? 'shell-nav-active' : undefined}
+                  onClick={() => onNavigate(item.view)}
+                >
+                  {item.label}
+                </button>
+              </li>
             ))}
           </ul>
         </nav>

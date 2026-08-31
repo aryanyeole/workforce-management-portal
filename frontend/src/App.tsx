@@ -1,12 +1,25 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './components/LoginPage';
-import { Shell } from './components/Shell';
+import { Shell, type View } from './components/Shell';
+import { ApprovalsTable } from './features/approvals/ApprovalsTable';
 
 const queryClient = new QueryClient();
 
+function ViewContent({ view }: { view: View }) {
+  switch (view) {
+    case 'approvals':
+      return <ApprovalsTable />;
+    default:
+      // My Expenses / Payroll / Onboarding land in Phase 9 Task 4.
+      return <p>Not built yet — Phase 9 Task 4.</p>;
+  }
+}
+
 function AppShell() {
   const { status, user } = useAuth();
+  const [view, setView] = useState<View>('approvals');
 
   if (status === 'loading') {
     return <div className="app-loading">Loading…</div>;
@@ -17,11 +30,8 @@ function AppShell() {
   }
 
   return (
-    <Shell>
-      <p>
-        Signed in as <strong>{user.email}</strong> ({user.role}).
-      </p>
-      <p>The approvals table and everything else lands in Phase 9 Task 2 onward.</p>
+    <Shell activeView={view} onNavigate={setView}>
+      <ViewContent view={view} />
     </Shell>
   );
 }
