@@ -21,3 +21,23 @@ export function fetchApprovalsPage(cursor: string | null): Promise<CursorPageRes
   }
   return apiFetch<CursorPageResponse<ExpenseResponse>>(`/api/v1/expenses/approvals?${params.toString()}`);
 }
+
+/**
+ * POST /api/v1/expenses/{id}/approve and /reject. Per-resource — there is
+ * no bulk endpoint (Phase 9 Task 3: the approvals table's own bulk-action UI
+ * calls these one at a time, bounded by concurrency, not in one request).
+ * `comment` is optional free text, same as the backend's ApprovalDecisionRequest.
+ */
+export function approveExpense(id: number, comment?: string): Promise<ExpenseResponse> {
+  return apiFetch<ExpenseResponse>(`/api/v1/expenses/${id}/approve`, {
+    method: 'POST',
+    body: comment ? JSON.stringify({ comment }) : undefined,
+  });
+}
+
+export function rejectExpense(id: number, comment?: string): Promise<ExpenseResponse> {
+  return apiFetch<ExpenseResponse>(`/api/v1/expenses/${id}/reject`, {
+    method: 'POST',
+    body: comment ? JSON.stringify({ comment }) : undefined,
+  });
+}

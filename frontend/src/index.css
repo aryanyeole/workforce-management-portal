@@ -182,6 +182,91 @@ body {
   color: #b91c1c;
 }
 
+.approvals-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.approvals-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.approvals-toolbar-count {
+  font-size: 0.85rem;
+  color: #374151;
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.approvals-toolbar button {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.approvals-toolbar button:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.approvals-toolbar-approve {
+  border-color: #16a34a !important;
+  color: #15803d;
+}
+
+.approvals-toolbar-reject {
+  border-color: #dc2626 !important;
+  color: #b91c1c;
+}
+
+.approvals-toolbar-status {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.approvals-select-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.approvals-result-banner {
+  padding: 0.6rem 0.9rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.approvals-result-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.approvals-result-summary button {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.approvals-result-failures {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  color: #b91c1c;
+}
+
 .approvals-table-wrap {
   overflow-x: auto;
   background: #fff;
@@ -215,8 +300,8 @@ body {
 }
 
 .approvals-scroll-container {
-  height: calc(100vh - 260px);
-  min-height: 320px;
+  height: calc(100vh - 320px);
+  min-height: 280px;
   overflow-y: auto;
   position: relative;
 }
