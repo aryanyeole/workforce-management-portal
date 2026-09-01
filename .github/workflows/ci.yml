@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          # Caches ~/.m2/repository, keyed on pom.xml — actions/setup-java's
+          # built-in Maven cache, not a separate action/plugin.
+          cache: maven
+
+      # git does not reliably preserve the executable bit on this wrapper
+      # (this repo is developed on Windows) — set it explicitly rather than
+      # assume it survived checkout.
+      - name: Make Maven Wrapper executable
+        run: chmod +x ./mvnw
+
+      # Same command run locally (CLAUDE.md's own Commands section: `mvn verify`,
+      # here via the wrapper) — build and the full Testcontainers-backed suite,
+      # nothing skipped. Testcontainers needs the runner's Docker daemon, which
+      # ubuntu-latest provides preinstalled and running; no extra setup step
+      # is needed for that. Every Postgres container AbstractIntegrationTest
+      # starts is wired up via Spring Boot's @ServiceConnection, which
+      # overrides the datasource URL with whatever ephemeral host port
+      # Testcontainers actually bound — application.yml's own
+      # jdbc:postgresql://localhost:5433/wmp default is a dev-only fallback
+      # never consulted by an IT that extends AbstractIntegrationTest, so
+      # there's no fixed-port assumption for CI to trip over.
+      - name: Build and run the full test suite
+        run: ./mvnw clean verify
+
+      # So a failure's actual test output is readable from the Actions run
+      # itself, without reproducing it locally first.
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            backend/target/surefire-reports
+            backend/target/failsafe-reports
+          retention-days: 14
