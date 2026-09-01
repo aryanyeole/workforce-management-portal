@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -10,28 +11,27 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Recent successful runs: ~1m31s. This is generous headroom over that for
+    # a cold cache / slow image pull, not a bound sized to the fast path --
+    # the point is bounding the failure mode (a hung Testcontainer sitting for
+    # the 360-minute default), not shaving time off the common case.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
           # Caches ~/.m2/repository, keyed on pom.xml — actions/setup-java's
           # built-in Maven cache, not a separate action/plugin.
           cache: maven
-
-      # git does not reliably preserve the executable bit on this wrapper
-      # (this repo is developed on Windows) — set it explicitly rather than
-      # assume it survived checkout.
-      - name: Make Maven Wrapper executable
-        run: chmod +x ./mvnw
 
       # Same command run locally (CLAUDE.md's own Commands section: `mvn verify`,
       # here via the wrapper) — build and the full Testcontainers-backed suite,
@@ -51,7 +51,7 @@ jobs:
       # itself, without reproducing it locally first.
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-reports
           path: |
