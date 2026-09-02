@@ -16,6 +16,98 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    build:
+      context: ./backend
+    container_name: wmp-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Container-network address (db:5432), not the 5433 host mapping above
+      # -- that mapping exists only so the host's own tooling/native Postgres
+      # 18 (which already owns 5432 on this machine) can reach this
+      # container from outside. SPRING_DATASOURCE_USERNAME/PASSWORD are left
+      # unset: their application.yml defaults (${DB_USER:wmp},
+      # ${DB_PASSWORD:wmp_local_dev}) already match db's own
+      # POSTGRES_USER/POSTGRES_PASSWORD above, so nothing here needs
+      # restating, and nothing here is a secret.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/wmp
+      # dev, not unset: DevDataSeeder and CorsConfig are both @Profile("dev")
+      # only, no finer-grained flag exists to pick one without the other.
+      # The seeder is what makes this compose stack useful at all -- no
+      # profile means no seeded accounts, means nothing to log in with, which
+      # defeats the point of running this stack to click around. CORS comes
+      # along for the ride: with the frontend now proxying /api same-origin,
+      # the browser never sends a cross-origin request through that path, so
+      # the CORS bean sits unused there. It's still live for someone hitting
+      # this service's own published port directly (Swagger, below) from a
+      # different origin, which is a strictly weaker exposure than the
+      # trade-off looks at first: CORS only widens what's *allowed*, it
+      # doesn't skip auth. A cleaner design would split DevDataSeeder and
+      # CorsConfig onto separate profiles so this file could take the
+      # seeder without the CORS bean -- that's a source change, and it's
+      # your call, not made here.
+      SPRING_PROFILES_ACTIVE: dev
+    ports:
+      # Published on purpose: the frontend's nginx only proxies /api/**, and
+      # springdoc's own paths (/v3/api-docs/**, /swagger-ui/**,
+      # /swagger-ui.html -- see PermissionRegistry's permit-all list) are not
+      # under /api at all, so Swagger is unreachable through the proxy no
+      # matter what. Publishing 8080 is the only way to get it directly, and
+      # it's what you said you sometimes want. 8080 was free on this host
+      # (checked before choosing it) and matches the container's own default,
+      # so `localhost:8080/swagger-ui.html` needs no extra mapping to
+      # remember.
+      - "8080:8080"
+    healthcheck:
+      # No HEALTHCHECK is baked into backend/Dockerfile (out of scope to add
+      # here), so this is defined at the compose level instead, same
+      # /actuator/health endpoint already confirmed live in the prior
+      # Dockerfile task. curl is present in the eclipse-temurin:21-jre-jammy
+      # base (confirmed by inspecting the built image) -- no tool added.
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: wmp-frontend
+    depends_on:
+      # Needed, and needs to be service_healthy specifically, not just
+      # service_started: nginx.conf.template's proxy_pass target is a plain
+      # hostname (envsubst renders it to a static string, e.g.
+      # http://backend:8080, before nginx's own master process starts), and
+      # nginx resolves a static proxy_pass hostname via DNS once at that
+      # startup -- if `backend` isn't resolvable on the compose network yet,
+      # nginx fails to start at all, taking this container down with it.
+      # service_started (a created-but-still-booting container) would avoid
+      # that specific crash, since Compose's DNS entries appear as soon as a
+      # container is attached to the network -- but it wouldn't avoid the
+      # weaker failure mode of nginx starting fine, resolving the name, and
+      # then getting connection-refused on every proxied request until the
+      # backend's own JVM finishes booting and Flyway/the seeder finish
+      # running. service_healthy waits out both: nothing here is created
+      # until /actuator/health already says the backend is genuinely ready.
+      backend:
+        condition: service_healthy
+    environment:
+      # Consumed by nginx.conf.template's envsubst rendering at container
+      # start (see frontend/Dockerfile), not at image build time -- resolves
+      # to the compose service name/port on this network.
+      BACKEND_HOST: backend
+      BACKEND_PORT: "8080"
+    ports:
+      # nginx's own container port is 80; publishing it as 80 too means
+      # http://localhost/ with nothing to remember. Free on this host
+      # (checked before choosing it), and unlike the backend, there's no
+      # competing reason to publish anything else -- nothing needs to reach
+      # this frontend directly except a browser.
+      - "80:80"
+
   # Phase 7: `docker compose up` alone never starts these — only
   # `docker compose --profile observability up -d` does. The backend app
   # itself runs on the host (mvnw spring-boot:run), not in this compose
