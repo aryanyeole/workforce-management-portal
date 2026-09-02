@@ -10,17 +10,21 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import com.aryanyeole.wmp.common.logging.CorrelationIdFilter;
 import com.aryanyeole.wmp.common.security.JwtAuthenticationFilter;
 import com.aryanyeole.wmp.common.security.RouteAuthorizationFilter;
 
 @Configuration
 public class SecurityConfig {
 
+    private final CorrelationIdFilter correlationIdFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RouteAuthorizationFilter routeAuthorizationFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+    public SecurityConfig(CorrelationIdFilter correlationIdFilter,
+                          JwtAuthenticationFilter jwtAuthenticationFilter,
                           RouteAuthorizationFilter routeAuthorizationFilter) {
+        this.correlationIdFilter = correlationIdFilter;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.routeAuthorizationFilter = routeAuthorizationFilter;
     }
@@ -39,6 +43,16 @@ public class SecurityConfig {
                 // splitting rules across both would defeat the purpose.
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // First filter in the whole chain: anchored to
+                // JwtAuthenticationFilter's own position, same pattern
+                // routeAuthorizationFilter below uses to anchor itself —
+                // two addFilterBefore calls both pointing at the same
+                // built-in class don't reliably order relative to each
+                // other, so a 401 from JwtAuthenticationFilter and a 403
+                // from RouteAuthorizationFilter both need MDC already set,
+                // which means this has to be anchored before the first of
+                // the two, not the built-in class both of them precede.
+                .addFilterBefore(correlationIdFilter, JwtAuthenticationFilter.class)
                 .addFilterAfter(routeAuthorizationFilter, JwtAuthenticationFilter.class)
                 .build();
     }

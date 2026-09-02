@@ -10,15 +10,18 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.aryanyeole.wmp.common.logging.CorrelationId;
 import com.aryanyeole.wmp.onboarding.domain.Employee;
 import com.aryanyeole.wmp.onboarding.domain.EmploymentStatus;
 import com.aryanyeole.wmp.onboarding.repository.EmployeeRepository;
@@ -46,6 +49,12 @@ import com.aryanyeole.wmp.payroll.repository.PayrollItemRepository;
  * asserts on Hikari's own pool state after a run completes, not on this
  * class's source text, and was verified to fail against the leaky version
  * before this fix landed.
+ *
+ * {@link #run()} tags every log line it produces with a fresh per-run ID
+ * under the same MDC key request-scoped correlation IDs use (see
+ * {@link com.aryanyeole.wmp.common.logging.CorrelationId}) — there's no
+ * inbound request to correlate a scheduled run against, so the run gets an
+ * identity of its own instead.
  */
 @Component
 public class PayrollAccrualJob {
@@ -88,25 +97,64 @@ public class PayrollAccrualJob {
      * waiting for a cron window.
      */
     public AccrualRunResult run() {
-        LocalDate today = LocalDate.now();
-        LocalDate periodStart = today.withDayOfMonth(1);
-        LocalDate periodEnd = today.withDayOfMonth(today.lengthOfMonth());
-        int daysElapsed = today.getDayOfMonth();
-        int daysInPeriod = today.lengthOfMonth();
+        // No inbound request to correlate this against — a scheduled run has
+        // no caller. A fresh ID per run under the same MDC key
+        // CorrelationIdFilter uses for requests is what makes a Phase
+        // 8-shaped incident traceable after the fact: this run's own
+        // structured log lines share one ID from start to finish, bounding
+        // its execution window in the log stream, and any request that
+        // failed while this run had the connection pool starved shows up
+        // right alongside it with its own (different) correlation ID and an
+        // overlapping timestamp — there is no single ID linking the two,
+        // because a job run and a request it happens to starve are
+        // genuinely different logical operations; timestamp proximity
+        // between two clearly-bounded, independently-searchable IDs is what
+        // makes the link visible, not a shared identifier pretending they're
+        // one operation.
+        // Saved and restored, not just removed in the finally below: run()
+        // has two callers on two different kinds of thread. The scheduled
+        // trigger's thread has nothing else in MDC, so remove/restore are
+        // equivalent there — but PayrollAccrualEndpoint's on-demand trigger
+        // calls this synchronously from inside an HTTP request thread that
+        // CorrelationIdFilter already tagged with that *request's* own ID.
+        // An unconditional remove would erase that request's ID from MDC
+        // for whatever runs on this thread after run() returns and before
+        // the filter's own cleanup — restoring it here means the on-demand
+        // path's own request logs stay correctly correlated after this
+        // method hands back control.
+        String previousId = MDC.get(CorrelationId.MDC_KEY);
+        String jobId = "accrual-" + UUID.randomUUID();
+        MDC.put(CorrelationId.MDC_KEY, jobId);
+        try {
+            LocalDate today = LocalDate.now();
+            LocalDate periodStart = today.withDayOfMonth(1);
+            LocalDate periodEnd = today.withDayOfMonth(today.lengthOfMonth());
+            int daysElapsed = today.getDayOfMonth();
+            int daysInPeriod = today.lengthOfMonth();
 
-        List<Employee> activeEmployees = employeeRepository.findByEmploymentStatusAndDeletedAtIsNull(
-                EmploymentStatus.ACTIVE);
+            List<Employee> activeEmployees = employeeRepository.findByEmploymentStatusAndDeletedAtIsNull(
+                    EmploymentStatus.ACTIVE);
 
-        int processed = 0;
-        for (Employee employee : activeEmployees) {
-            BigDecimal accrued = estimateAccrued(employee.getId(), daysElapsed, daysInPeriod);
-            upsert(employee.getId(), periodStart, periodEnd, accrued);
-            processed++;
+            log.info("Payroll accrual run starting: period={}..{}, activeEmployees={}",
+                    periodStart, periodEnd, activeEmployees.size());
+
+            int processed = 0;
+            for (Employee employee : activeEmployees) {
+                BigDecimal accrued = estimateAccrued(employee.getId(), daysElapsed, daysInPeriod);
+                upsert(employee.getId(), periodStart, periodEnd, accrued);
+                processed++;
+            }
+
+            log.info("Payroll accrual run complete: period={}..{}, employeesProcessed={}",
+                    periodStart, periodEnd, processed);
+            return new AccrualRunResult(periodStart, periodEnd, processed);
+        } finally {
+            if (previousId != null) {
+                MDC.put(CorrelationId.MDC_KEY, previousId);
+            } else {
+                MDC.remove(CorrelationId.MDC_KEY);
+            }
         }
-
-        log.info("Payroll accrual run complete: period={}..{}, employeesProcessed={}",
-                periodStart, periodEnd, processed);
-        return new AccrualRunResult(periodStart, periodEnd, processed);
     }
 
     /** Prorated from the employee's most recent payroll item; zero if they have none yet. */

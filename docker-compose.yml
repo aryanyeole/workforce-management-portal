@@ -48,7 +48,12 @@ services:
       # CorsConfig onto separate profiles so this file could take the
       # seeder without the CORS bean -- that's a source change, and it's
       # your call, not made here.
-      SPRING_PROFILES_ACTIVE: dev
+      # container is additive to dev, not a replacement: dev still governs
+      # DevDataSeeder/CorsConfig as before, container independently switches
+      # console logging to structured JSON (see application.yml) -- the two
+      # flags exist because those are genuinely different axes, and this
+      # service wants both.
+      SPRING_PROFILES_ACTIVE: dev,container
     ports:
       # Published on purpose: the frontend's nginx only proxies /api/**, and
       # springdoc's own paths (/v3/api-docs/**, /swagger-ui/**,
