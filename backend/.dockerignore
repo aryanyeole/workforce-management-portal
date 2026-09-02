@@ -1,0 +1,19 @@
+# Build output — regenerated inside the image by the build stage itself;
+# never something to ship into the build context from the host.
+target/
+
+# Local dev runtime data (wmp.onboarding.document-storage.base-path's
+# default, ./data/onboarding-documents) — not part of the application,
+# never belongs in an image.
+data/
+
+# Version control and IDE metadata.
+.git/
+.idea/
+.vscode/
+*.iml
+
+# Not present under backend/ today, but this is a monorepo — if this
+# Dockerfile is ever built with a wider context than backend/ itself,
+# these must never cross into it regardless.
+node_modules/
