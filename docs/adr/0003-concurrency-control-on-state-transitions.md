@@ -154,6 +154,33 @@ trailing throw is what stops it: the loser's own read was stale at the
 moment it decided to act, and a `409` is the correct report of that
 regardless of what the row ended up holding.
 
+### One graph property, three decisions
+
+`EmploymentStatus`'s `ACTIVE <-> ON_LEAVE` cycle is not a detail that came up
+once. It drove three separate decisions in this ADR, worth stating together
+rather than left scattered across the sections that each needed it:
+
+1. It is why the uniqueness-constraint option was rejected (see "Options
+   considered and rejected," above): that option's safety depended on every
+   transition graph in this codebase being strictly terminal, and
+   `EmploymentStatus` isn't.
+2. It is why the trailing `ConflictException` in `compareAndSetStatusOrConflict`
+   is dead code for expense/payroll but live for employee (see "The cycle's
+   consequence for the chosen guard," above): `EmployeeTransitions`' idempotent
+   `current == target` no-op is only reachable because a cycle lets a caller
+   legitimately land back on a status it has already left.
+3. It is why `EmployeeUpdateConcurrencyIT`'s regression test needed a second,
+   inner synchronization barrier the expense/payroll tests never required
+   (see Evidence, below). Racing two *different* targets from a shared start
+   looked sufficient at first, but a straggler reading a post-commit
+   `ON_LEAVE` can still legally continue to `TERMINATED` — the same cycle,
+   one step further along the graph, reopening the identical ambiguity a
+   different-target race was supposed to have closed.
+
+Three consequences from one property of one enum. `ExpenseStatus` and
+`PayrollRunStatus` never raised any of these questions, because neither has
+a cycle.
+
 ### Deliberate duplication, not an oversight
 
 The same six-or-so lines — the `@Modifying @Query` and its
@@ -185,26 +212,48 @@ Deterministic reproduction, no sleeps: real threads released together by a
   — same shape, same result: `expected: 1 but was: 10` before the fix, one
   winner and nine conflicts after.
 - [`EmployeeUpdateConcurrencyIT`](../../backend/src/test/java/com/aryanyeole/wmp/onboarding/service/EmployeeUpdateConcurrencyIT.java)
-  — two cases. `concurrentEmploymentStatusTransitions_exactlyOneWins` (10
-  racers on the same `PENDING -> ACTIVE` update) produced the identical
-  `expected: 1 but was: 10` before the fix. `losingRaceLeavesOtherPatchedFieldsUntouched`
-  (two racers, same target status, each pairing it with its own distinct
-  `firstName`) failed before the fix with "exactly one of the two racers
-  should win: Expecting value to be true but was false" — both racers
-  reported success, and nothing in the assertion could tell them apart. Both
-  cases pass against the fix, including the check that the losing racer's
-  `firstName` never reached the database.
+  — originally two cases racing the *same* target (both racers
+  `PENDING -> ACTIVE`), verified locally red-then-green exactly like the
+  two tests above: `expected: 1 but was: 10` before the fix, one winner
+  and nine conflicts after. That local verification was real, and it was
+  not enough. CI failed the same test with `expected: 1 but was: 2` — a
+  genuine multi-winner this machine's own scheduling never happened to
+  produce locally. The diagnosis: with every racer requesting the
+  identical target, no `200` is ever misleading, because the row ends up
+  exactly where every racer asked it to — a same-target race cannot
+  distinguish the fix from its absence at all, on any machine, given
+  enough scheduling luck. Local red/green had verified the fix produces
+  the right count under *this* machine's own timing; it could not, and
+  did not, verify that the test's own assertion was capable of catching
+  the bug's absence in general. Redesigned (commit `567dcf1`) to race
+  different targets (`ACTIVE -> ON_LEAVE` vs. `ACTIVE -> TERMINATED`)
+  with a `@MockitoSpyBean`-gated inner barrier forcing both racers' reads
+  to align — see "One graph property, three decisions" below for why
+  different targets alone still weren't sufficient. Run against
+  `6d4bbdc^`: `[exactly one of the two different-target racers should
+  win] Expecting value to be true but was false` on both redesigned
+  tests — both racers succeeded, the actual bug this suite exists to
+  catch. Green after restoring the fix, four consecutive runs with no
+  flakiness before the red check, once more after.
 - The dev database itself carried the original evidence: two `SUBMITTED`
   `approval_events` rows for expense report 132001 (ids 77 and 78, ~6ms
   apart), left in place rather than cleaned up, from the double-click that
   first surfaced this.
-- Full suite: 148 tests, 0 failures after the expense/payroll fix
-  (commit `7e7aebc`); 151 tests, 0 failures after the employee fix (commit
-  `6d4bbdc`), all via `.\mvnw.cmd clean verify`. TODO: the exact
-  freshly-verified test count immediately *before* `7e7aebc` was not
-  independently re-run in that task — only the post-fix 148 was — so the
-  145-tests figure from Phase 9's own framing is not repeated here as a
-  verified before/after pair.
+- Full suite, verified directly rather than left as a TODO: checked out
+  `7e7aebc~1` (the commit immediately before the expense/payroll fix),
+  ran `.\mvnw.cmd clean verify`, and restored the working tree afterward.
+  It reports `Tests run: 145, Failures: 0, Errors: 0, Skipped: 0` on
+  failsafe, plus the one surefire test that existed at that commit
+  (`WmpApplicationTests` — itself later found to depend on ambient host
+  Postgres and fixed separately, see docs/measurements.md), for **146
+  total**. The 145 figure matches Phase 9's own framing exactly, because
+  that framing was counting failsafe only; Phase 9 was entirely frontend
+  work and touched no backend test, so the count held unchanged from
+  end-of-Phase-8 through to this commit. From there, all via the
+  identical `.\mvnw.cmd clean verify`, 0 failures throughout: 148 total
+  after the expense/payroll fix (`7e7aebc`), 151 total after the employee
+  fix (`6d4bbdc`), 152 total after redesigning `EmployeeUpdateConcurrencyIT`
+  (`567dcf1`).
 
 ## Consequences
 

@@ -716,3 +716,104 @@ The rendered-range approach (watching `virtualizer.getVirtualItems()`'s last ind
 ### The finding, stated plainly
 
 Virtualization turned a ~13x-degrading, fully-linear-DOM-growth implementation into one with **flat ~2.2 ms/row cost and flat ~290-node DOM regardless of depth**, verified against the entire real 20,976-row queue rather than a partial run. Network latency was already flat in Task 2 and stays flat here — keyset pagination was never the bottleneck. ROADMAP's "scroll to row 40,000 without the UI degrading" claim is met as far as real seed data allows: the implementation shows zero degradation through the full 20,976-row queue and there is no reason from these numbers (flat cost/row, flat DOM, constant 37-row render window) to expect degradation at 40,000 either — the ceiling here was the dataset, not the UI.
+
+## Phase 10, CI setup — three findings from three pushes
+
+**Date:** 2026-09-01 to 2026-09-02. **Environment:** GitHub Actions
+`ubuntu-latest` runner (UTC, Docker preinstalled, no ambient state carried
+over from any previous run) versus the local dev machine used for every
+other measurement in this document (non-UTC — this session's own local
+timestamps read `-07:00` throughout, confirmed again for this entry below).
+Three real pushes, three real findings, none of them anticipated before the
+runner actually ran the suite cold.
+
+### Finding 1 — a test depended on ambient host state, invisible locally
+
+[`WmpApplicationTests`](../../backend/src/test/java/com/aryanyeole/wmp/WmpApplicationIT.java)
+(commit `624a83d`) was a bare `@SpringBootTest` with no Testcontainers
+wiring, so it fell through to `application.yml`'s dev default
+(`jdbc:postgresql://localhost:5433/wmp`). It had been passing on every local
+run throughout this project for one reason: a dev Postgres container
+happened to be listening on 5433 on whatever machine ran it, and the test
+happily ran Flyway against that live dev database instead of an isolated
+Testcontainers instance. There was no earlier CI to have caught it sooner —
+this repository's very first CI run was the first genuinely clean
+environment this test had ever faced, no ambient Postgres, nothing left
+over from a prior run, and it surfaced the dependency immediately as
+`Connection refused`. Auditing every context-loading test class (12 total)
+found this was the *only* one with the problem — the other 11 already
+extended `AbstractIntegrationTest`. Nothing about the defect itself was
+subtle; what made it invisible was that every environment it had ever run
+in before happened to supply the thing it silently depended on.
+
+### Finding 2 — a concurrency test's own design flaw, only visible under different scheduling
+
+`EmployeeUpdateConcurrencyIT` (commit `567dcf1`, full account in
+[ADR 0003](adr/0003-concurrency-control-on-state-transitions.md)) was
+verified red-then-green locally before ever reaching CI, and CI still
+failed it: `expected: 1 but was: 2`. The test's original design raced
+`RACER_COUNT` threads all requesting the *identical* target
+(`PENDING -> ACTIVE`) — a shape that cannot distinguish the fix from its
+absence on principle, since no `200` is ever misleading when every racer
+asked for the exact state the row ends up in. It took a CI runner with
+different scheduling characteristics to actually produce the multi-winner
+outcome this shape could always, in principle, produce; the local machine's
+own timing never happened to land there in 315 attempts across two earlier
+diagnostic runs. Local red/green had verified the fix behaves correctly
+under this machine's own timing — it could not, and did not, verify the
+test itself was capable of catching the bug's absence in general. The fix
+here was to a test's own assertion design, not to the state-machine guard,
+which the same red/green discipline (this time against reverted source,
+`6d4bbdc^`) confirmed was correct throughout.
+
+### Finding 3 — timezone independence beyond the one explicit pin
+
+The suite passes on a clean UTC Linux runner without modification. The only
+place this codebase deliberately pins a session timezone is
+[`application-test.yml`](../../backend/src/test/resources/application-test.yml)'s
+`SET TIME ZONE 'Asia/Kolkata'`, added in Phase 6 specifically so
+`ExpenseApprovalsKeysetIT`'s own timezone-boundary assertions run against a
+known, deliberately non-UTC, non-whole-hour-offset session regardless of
+whatever timezone the JVM or host happens to be in (see ADR 0002). Every
+other IT class carries no such pin. CI's real, unmodified green run — on a
+UTC host, nothing like this session's own `-07:00` local machine — is
+direct evidence that nothing beyond that one explicit pin was ever
+implicitly relying on host timezone: if it had been, a UTC runner is
+exactly the environment that would have exposed it, the same way a
+Postgres-free runner exposed Finding 1.
+
+### Wall-clock: CI versus local
+
+CI (`ubuntu-latest`, real runs from this same work): **1m20s** for the run
+that carried `624a83d`'s `WmpApplicationTests` fix and still failed —
+`WmpApplicationIT` itself passed in that run, and the failure was
+`EmployeeUpdateConcurrencyIT`'s flake (Finding 2), surfacing one push after
+Finding 1 was fixed. **1m31s** for the full green run once both fixes had
+landed. Local, run fresh for this comparison rather than reused from an
+earlier task, on the current `main` (`.\mvnw.cmd clean verify`, 152 tests,
+0 failures): **2m01s**.
+
+The CI figure is worth a specific caution rather than a specific claim.
+Every IT class in this suite extends
+[`AbstractIntegrationTest`](../../backend/src/test/java/com/aryanyeole/wmp/support/AbstractIntegrationTest.java),
+whose Postgres container is a static singleton started once per JVM, and
+failsafe's own default (`reuseForks=true`, a single fork) keeps every test
+class in that one JVM — so the design intent is exactly one container and,
+for the many classes sharing an identical bare `@SpringBootTest` shape, one
+cached Spring context, for the whole run. Twelve independent
+container-plus-context startups — each needing its own image pull on an
+ephemeral runner with no persisted Docker cache between jobs, each paying
+the 20-40 second fresh-context cost this document's own earlier logs show
+for a first Spring Boot startup — could not plausibly fit inside 91 seconds
+total, checkout and JDK setup and Maven resolution and compilation
+included. That the run *did* fit is consistent with the singleton and the
+context cache both actually being shared on this runner, as designed. It is
+not a direct measurement of it — no per-container start count was
+captured, and the local machine's own warm image cache and warm `.m2`
+repository make it a poor control to diff against for that specific
+question. A direct measurement would mean instrumenting or grepping a CI
+run's own log for Testcontainers' `Creating container for image:
+postgres:16-alpine` line and confirming it appears exactly once, or
+adding a per-class timestamp to `AbstractIntegrationTest`'s static
+initializer and confirming it only ever fires on the first class. Left as
+a proposal, not a claim made here.
