@@ -1,0 +1,40 @@
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA fallback: any path that isn't a real file/directory in dist/ falls
+    # back to index.html. This app has no client-side router yet (Shell/App
+    # switch views with a plain useState<View>, not URL paths), so nothing
+    # today actually exercises a non-root route -- but a static file server
+    # with no fallback 404s on any path but / regardless, and the task this
+    # image was built for explicitly requires a direct load/refresh off root
+    # not to 404, so the fallback is here correctly rather than provably
+    # unused.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Same-origin API proxy. The build stage bakes VITE_API_BASE_URL="" into
+    # the bundle, so client.ts's fetch calls resolve as relative paths
+    # (/api/v1/...) against whatever origin actually serves this page --
+    # nginx, not the backend directly. That means nginx is the one place
+    # that needs to know where the backend is, and BACKEND_HOST/BACKEND_PORT
+    # are resolved from real environment variables at container *start*
+    # (envsubst templating this file at path -> /etc/nginx/conf.d/default.conf,
+    # the official nginx image's own mechanism), not baked in at image build
+    # time -- the same image can point at a different backend per
+    # environment with no rebuild. No proxy_pass URI component: the full
+    # original request URI is forwarded unchanged, so /api/v1/auth/login
+    # reaches http://$BACKEND_HOST:$BACKEND_PORT/api/v1/auth/login exactly.
+    location /api/ {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
