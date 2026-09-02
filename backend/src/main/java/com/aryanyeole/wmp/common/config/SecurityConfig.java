@@ -12,19 +12,23 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import com.aryanyeole.wmp.common.logging.CorrelationIdFilter;
 import com.aryanyeole.wmp.common.security.JwtAuthenticationFilter;
+import com.aryanyeole.wmp.common.security.RateLimitFilter;
 import com.aryanyeole.wmp.common.security.RouteAuthorizationFilter;
 
 @Configuration
 public class SecurityConfig {
 
     private final CorrelationIdFilter correlationIdFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RouteAuthorizationFilter routeAuthorizationFilter;
 
     public SecurityConfig(CorrelationIdFilter correlationIdFilter,
+                          RateLimitFilter rateLimitFilter,
                           JwtAuthenticationFilter jwtAuthenticationFilter,
                           RouteAuthorizationFilter routeAuthorizationFilter) {
         this.correlationIdFilter = correlationIdFilter;
+        this.rateLimitFilter = rateLimitFilter;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.routeAuthorizationFilter = routeAuthorizationFilter;
     }
@@ -53,6 +57,13 @@ public class SecurityConfig {
                 // which means this has to be anchored before the first of
                 // the two, not the built-in class both of them precede.
                 .addFilterBefore(correlationIdFilter, JwtAuthenticationFilter.class)
+                // Anchored after correlationIdFilter specifically (same
+                // reasoning as above, not after the built-in class jwt is
+                // itself anchored to) so it's chained strictly between the
+                // two: correlated (so a 429 carries an ID) but still ahead
+                // of authentication (so a flood is rejected before this
+                // spends any work parsing a JWT or resolving a permission).
+                .addFilterAfter(rateLimitFilter, CorrelationIdFilter.class)
                 .addFilterAfter(routeAuthorizationFilter, JwtAuthenticationFilter.class)
                 .build();
     }

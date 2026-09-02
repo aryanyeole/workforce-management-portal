@@ -36,6 +36,20 @@ final class SecurityResponses {
                 .formatted(escape(title), status, escape(detail), escape(correlationId == null ? "" : correlationId)));
     }
 
+    /**
+     * RateLimitFilter's one caller — same ProblemDetail-shaped body as
+     * write() (including correlationId), plus the Retry-After header a 429
+     * is expected to carry. Kept here rather than as a separate mechanism:
+     * this is still a filter-chain response the DispatcherServlet/
+     * GlobalExceptionHandler never sees, same reason 401/403 are hand-built
+     * above.
+     */
+    static void writeTooManyRequests(HttpServletResponse response, String detail, long retryAfterSeconds)
+            throws IOException {
+        response.setHeader("Retry-After", String.valueOf(retryAfterSeconds));
+        write(response, 429, "Too Many Requests", detail);
+    }
+
     private static String escape(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }

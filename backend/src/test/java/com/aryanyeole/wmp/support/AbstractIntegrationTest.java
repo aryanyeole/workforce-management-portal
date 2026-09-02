@@ -1,6 +1,7 @@
 package com.aryanyeole.wmp.support;
 
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
@@ -26,7 +27,21 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * present: it's wired up by Spring's own ServiceConnectionContextCustomizerFactory,
  * which scans the test class hierarchy for annotated fields regardless of
  * the Testcontainers JUnit extension.
+ *
+ * wmp.rate-limit.login.enabled=false is set here, on the one class every IT
+ * already extends, rather than under the pre-existing "test" Spring profile
+ * (application-test.yml): only 3 of the 12 IT classes actually activate
+ * "test", but 5 separate classes call the real POST /api/v1/auth/login
+ * through MockMvc — which runs RateLimitFilter exactly like a real request,
+ * same Spring context, same in-memory bucket, same simulated client address
+ * for every one of them. Gating on "test" would leave most of that traffic
+ * exposed to a live limiter never meant to police it. @TestPropertySource
+ * is merged in from superclasses (unlike plain @ActiveProfiles-driven YAML,
+ * which a subclass could otherwise not fully control) and takes precedence
+ * over any profile-specific document, so this reaches every IT regardless
+ * of which profile(s) it separately activates.
  */
+@TestPropertySource(properties = "wmp.rate-limit.login.enabled=false")
 public abstract class AbstractIntegrationTest {
 
     @ServiceConnection

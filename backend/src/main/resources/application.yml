@@ -81,6 +81,16 @@ wmp:
     access-token-ttl: PT30M
     refresh-token-ttl: P7D
     issuer: wmp
+  rate-limit:
+    login:
+      # 5 attempts land immediately (a legitimate user mistyping a password
+      # twice never notices this exists), then one recovers every 12
+      # seconds. Disabled for the whole IT suite regardless of this default
+      # — see AbstractIntegrationTest's own comment for why the pre-existing
+      # "test" Spring profile alone wasn't the right switch for that.
+      enabled: ${WMP_RATE_LIMIT_LOGIN_ENABLED:true}
+      capacity: ${WMP_RATE_LIMIT_LOGIN_CAPACITY:5}
+      refill-per-minute: ${WMP_RATE_LIMIT_LOGIN_REFILL_PER_MINUTE:5}
   onboarding:
     document-storage:
       base-path: ${WMP_DOCUMENT_STORAGE_PATH:./data/onboarding-documents}
