@@ -1,35 +1,8 @@
 # Workforce Management Portal — Build Roadmap
 
-**Goal:** a real, running system that makes every claim on the resume literally true — including the measured numbers.
-
 **Stack:** Java 21, Spring Boot 4.1.x, PostgreSQL 16, Flyway, HikariCP, Micrometer/Actuator, React 18 + Vite, Docker Compose, GitHub Actions.
 
 **Repo:** `workforce-management-portal` (monorepo: `/backend`, `/frontend`, `/docs`, `/load`)
-
----
-
-## Ground rule: measure before you fix
-
-Three resume bullets describe *outcomes of investigation*, not features:
-
-- "Chose keyset pagination **once the table crossed 50,000 rows**"
-- "**Traced** intermittent 500s to connection-pool exhaustion"
-- "Cut latency **from 410ms to 120ms**"
-
-These only become true if the broken state exists first. So Phases 6–8 deliberately build the slow/broken version, measure it, then fix it. Record every number in `/docs/measurements.md` with the raw Actuator output. Your real numbers will differ from 410→120 — **update the resume to your actual numbers when you're done.**
-
----
-
-## Phase 0 — Skeleton & first commit
-
-- [ ] Verify toolchain: JDK 21, Maven, Docker Desktop, Node 20+
-- [ ] `git init`, GitHub repo `workforce-management-portal`, MIT license, `.gitignore`
-- [ ] Spring Boot skeleton via start.spring.io (web, data-jpa, validation, security, actuator, flyway, postgresql, lombok)
-- [ ] `docker-compose.yml` with Postgres 16 + named volume
-- [ ] `GET /actuator/health` returns UP against the containerized DB
-- [ ] `README.md` stub
-
-**Done when:** `mvn spring-boot:run` connects to Dockerized Postgres and health is UP.
 
 ---
 
@@ -47,7 +20,7 @@ Tables: `employees`, `departments`, `roles`, `user_accounts`, `onboarding_tasks`
 
 ---
 
-## Phase 2 — Auth + centralized RBAC filter ← *resume bullet 1*
+## Phase 2 — Auth + centralized RBAC filter
 
 The whole point: **one** authorization component, not `@PreAuthorize` scattered across 30 controllers.
 
@@ -115,7 +88,7 @@ Build one domain per phase, each with: DTOs (never expose entities), bean valida
 
 ---
 
-## Phase 6 — Scale, then keyset pagination ← *resume bullet 2*
+## Phase 6 — Scale, then keyset pagination
 
 - [ ] Seed generator: 60,000+ expense reports, ~2,000 employees, realistic status/date spread (`/load/seed.sql` or a `@Profile("seed")` runner)
 - [ ] **First** implement `/expenses/approvals` with classic offset pagination (`LIMIT ? OFFSET ?`)
@@ -125,11 +98,9 @@ Build one domain per phase, each with: DTOs (never expose entities), bean valida
 - [ ] Re-measure the same pages. Table the before/after.
 - [ ] `/docs/adr/0002-keyset-pagination.md` — including the trade-off you actually accepted (no random page jumps, harder filtering)
 
-**Done when:** deep-page latency is flat and you have the two `EXPLAIN` plans side by side.
-
 ---
 
-## Phase 7 — Actuator timers, then composite indexes ← *resume bullet 4*
+## Phase 7 — Actuator timers, then composite indexes
 
 - [ ] Micrometer `@Timed` on approval endpoints; expose `/actuator/metrics/http.server.requests`
 - [ ] Optional: Prometheus + Grafana in Compose for a screenshot-able dashboard
@@ -139,11 +110,9 @@ Build one domain per phase, each with: DTOs (never expose entities), bean valida
 - [ ] Re-run the identical load script — **write down the new p50**
 - [ ] `/docs/measurements.md` with both runs, index DDL, and plans
 
-**Done when:** you can state your real before/after numbers and show the plan that explains them.
-
 ---
 
-## Phase 8 — Reproduce and fix pool exhaustion ← *resume bullet 3*
+## Phase 8 — Reproduce and fix pool exhaustion
 
 This is the best interview story in the project. Build the bug on purpose, then debug it as if you hadn't.
 
@@ -154,8 +123,6 @@ This is the best interview story in the project. Build the bug on purpose, then 
 - [ ] Fix: try-with-resources, bounded `maximum-pool-size`, `connection-timeout`, `leak-detection-threshold`, and Postgres `statement_timeout` + `idle_in_transaction_session_timeout`
 - [ ] Regression test: integration test that fails on the leaky version and passes after
 - [ ] `/docs/incidents/2026-xx-payroll-500s.md` — timeline, symptom, hypotheses ruled out, root cause, fix, prevention
-
-**Done when:** the incident doc reads like a real postmortem and the regression test guards it.
 
 ---
 
@@ -180,22 +147,3 @@ This is the best interview story in the project. Build the bug on purpose, then 
 - [ ] Rate limiting + CORS + secrets via env, not committed
 
 ---
-
-## Phase 11 — Make it legible to employers
-
-- [ ] `README.md`: architecture diagram, one-command quickstart, the **before/after tables**, screenshots
-- [ ] ADRs 0001–0003 and the incident doc linked from the README
-- [ ] Get a real code review — an ASU peer, a mentor, or a public PR — so "confirmed during peer code review" is true. If you can't, reword that clause.
-- [ ] Rewrite the four resume bullets using your *measured* numbers
-- [ ] Technical blog post on the pool-exhaustion debug (best-performing kind of post for backend roles)
-
----
-
-## Commit discipline
-
-Interviewers do read git history — and at least one of your take-homes is graded on it.
-
-- Small, atomic commits with imperative subjects: `feat(expense): add keyset pagination to approvals queue`
-- Conventional Commits prefixes: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `chore`
-- Branch per phase: `phase-6-keyset-pagination` → PR → squash or merge
-- Commit the *slow* version before the fast one. The history itself becomes evidence of the engineering narrative.
